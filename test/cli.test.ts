@@ -4,13 +4,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COMMANDS, main, usage, type CliIo } from "../src/cli.ts";
-
-function capture(): { io: CliIo; out: string[]; err: string[] } {
-  const out: string[] = [];
-  const err: string[] = [];
-  return { io: { out: (s) => out.push(s), err: (s) => err.push(s) }, out, err };
-}
+import { COMMANDS, main, usage } from "../src/cli.ts";
+import { capture } from "./helpers.ts";
 
 test("usage names every command", () => {
   const text = usage();

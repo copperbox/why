@@ -1,32 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { main, type CliIo } from "../src/cli.ts";
+import { rm } from "node:fs/promises";
+import { main } from "../src/cli.ts";
+import { capture, makeBundle } from "./helpers.ts";
 
 const HARBOR = ["--bundle", "examples/harbor"];
-
-function capture(): { io: CliIo; out: string[]; err: string[] } {
-  const out: string[] = [];
-  const err: string[] = [];
-  return { io: { out: (s) => out.push(s), err: (s) => err.push(s) }, out, err };
-}
 
 async function blame(args: string[]): Promise<{ code: number; out: string; err: string }> {
   const { io, out, err } = capture();
   const code = await main(["blame", ...args], process.cwd(), io);
   return { code, out: out.join("\n"), err: err.join("\n") };
-}
-
-async function makeBundle(files: Record<string, string>): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "why-blame-"));
-  for (const [rel, source] of Object.entries(files)) {
-    await mkdir(join(root, rel, ".."), { recursive: true });
-    await writeFile(join(root, rel), source);
-  }
-  return root;
 }
 
 function concept(fields: {

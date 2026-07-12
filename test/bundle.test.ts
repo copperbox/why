@@ -1,20 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { rm } from "node:fs/promises";
 import { CONFIDENCE_LEVELS, loadBundle } from "../src/bundle.ts";
+import { makeBundle } from "./helpers.ts";
 
 const HARBOR = "examples/harbor";
-
-async function makeBundle(files: Record<string, string>): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "why-bundle-"));
-  for (const [rel, source] of Object.entries(files)) {
-    await mkdir(join(root, rel, ".."), { recursive: true });
-    await writeFile(join(root, rel), source);
-  }
-  return root;
-}
 
 test("harbor loads all six concepts with no diagnostics", async () => {
   const bundle = await loadBundle(HARBOR);

@@ -6,19 +6,14 @@ import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { loadBundle, validateBundle } from "@copperbox/okf-mcp";
-import { main, type CliIo } from "../src/cli.ts";
+import { main } from "../src/cli.ts";
 import {
   InitError,
   SNIPPET_BEGIN,
   SNIPPET_END,
   writeCaptureSnippet,
 } from "../src/init.ts";
-
-function capture(): { io: CliIo; out: string[]; err: string[] } {
-  const out: string[] = [];
-  const err: string[] = [];
-  return { io: { out: (s) => out.push(s), err: (s) => err.push(s) }, out, err };
-}
+import { capture } from "./helpers.ts";
 
 async function makeGitRepo(): Promise<string> {
   const root = realpathSync(await mkdtemp(join(tmpdir(), "why-init-")));
