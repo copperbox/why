@@ -7,8 +7,9 @@
 //
 // Approach: `git log -L` cannot express this query (it interprets both the
 // range and the path at the *newest* revision — see NOTES.md for the observed
-// failure modes). Instead we walk the first-parent commit sequence from as_of
-// to HEAD and apply each step's zero-context diff hunks to the tracked range:
+// failure modes). Instead we walk a parent→child commit chain from as_of to
+// HEAD (see commitChain) and apply each step's zero-context diff hunks to the
+// tracked range:
 //
 //   - hunks entirely above the range shift it;
 //   - hunks overlapping the range kill the overlapped lines;
@@ -157,6 +158,45 @@ function applyHunks(lines: TrackedLine[], hunks: Hunk[]): TrackedLine[] {
   return survivors;
 }
 
+/**
+ * Parent→child commit chain from asOf (exclusive) to HEAD (inclusive), each
+ * element a child of the one before it, preferring first parents.
+ *
+ * `rev-list --first-parent asOf..HEAD` is not usable here: it lists HEAD's
+ * first-parent chain, so when asOf is reachable from HEAD only through a
+ * merge's *second* parent (anchor created on a feature branch, branch later
+ * merged — the normal workflow), consecutive listed commits are not parent
+ * and child of each other, and diffing them reads branch divergence as edits:
+ * a false `lost` verdict for content that is alive at HEAD. Instead, walk
+ * backwards from HEAD through the ancestry-path graph, descending at each
+ * merge into the first parent that still leads to asOf.
+ */
+function commitChain(repo: string, asOfSha: string): string[] {
+  const out = gitOrThrow(repo, ["rev-list", "--ancestry-path", "--parents", `${asOfSha}..HEAD`]);
+  // Commits that are both descendants of asOf and ancestors of HEAD, each
+  // mapped to its parents (which may lie outside that set).
+  const parentsOf = new Map<string, string[]>();
+  for (const line of out.split("\n")) {
+    if (line === "") continue;
+    const [sha, ...parents] = line.split(" ");
+    parentsOf.set(sha, parents);
+  }
+  if (parentsOf.size === 0) return []; // asOf is HEAD itself
+  const chain: string[] = [];
+  let cur = gitOrThrow(repo, ["rev-parse", "HEAD"]).trim();
+  while (cur !== asOfSha) {
+    chain.push(cur);
+    const next = parentsOf.get(cur)?.find((p) => p === asOfSha || parentsOf.has(p));
+    if (next === undefined) {
+      // Unreachable: resolveAsOfCommit guarantees asOf is an ancestor of
+      // HEAD, so every commit on an ancestry path has a parent on one.
+      throw new Error(`no parent chain from HEAD back to as_of ${asOfSha}`);
+    }
+    cur = next;
+  }
+  return chain.reverse();
+}
+
 export function traceRange(repo: string, anchor: RangeAnchor): TraceResult {
   const { path, lines, asOf } = anchor;
   if (
@@ -184,9 +224,7 @@ export function traceRange(repo: string, anchor: RangeAnchor): TraceResult {
   for (let n = lines.start; n <= lines.end; n++) tracked.push({ orig: n, cur: n });
   let curPath = path;
 
-  const commits = gitOrThrow(repo, ["rev-list", "--reverse", "--first-parent", `${asOfSha}..HEAD`])
-    .split("\n")
-    .filter(Boolean);
+  const commits = commitChain(repo, asOfSha);
 
   let prev = asOfSha;
   for (const commit of commits) {

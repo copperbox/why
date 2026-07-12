@@ -223,7 +223,7 @@ test("file deleted then re-added stays lost: file-deleted (resurrection is not t
   assert.deepEqual(res, { lost: true, reason: "file-deleted" });
 });
 
-test("changes arriving via a merge commit are traced through first-parent steps", (t) => {
+test("as_of on mainline: feature-side changes arrive via the merge step", (t) => {
   const repo = makeRepo(t);
   write(repo, "src/a.txt", baseFile());
   const asOf = commit(repo, "c1");
@@ -235,6 +235,87 @@ test("changes arriving via a merge commit are traced through first-parent steps"
   commit(repo, "main: unrelated");
   git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
   const res = traceRange(repo, { path: "src/a.txt", lines: ANCHOR_LINES, asOf });
+  assert.deepEqual(res, {
+    lost: false,
+    path: "src/a.txt",
+    lines: { start: FN_START + 5, end: FN_END + 5 },
+  });
+});
+
+test("as_of on a merged feature branch (second parent): live lines stay live", (t) => {
+  // Regression: a first-parent walk of asOf..HEAD diffs the feature commit
+  // against an unrelated main commit and misreads branch divergence as a
+  // rewrite. This is the standard topology for dig-produced anchors.
+  const repo = makeRepo(t);
+  write(repo, "src/a.txt", seq("top", 10));
+  commit(repo, "base");
+  git(repo, "checkout", "-q", "-b", "feature");
+  write(repo, "src/a.txt", [...seq("top", 10), ...seq("fn", 5)]);
+  const asOf = commit(repo, "feature: append fn 1..5");
+  git(repo, "checkout", "-q", "main");
+  write(repo, "src/other.txt", ["main work"]);
+  commit(repo, "main: unrelated");
+  git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
+  const res = traceRange(repo, { path: "src/a.txt", lines: ANCHOR_LINES, asOf });
+  assert.deepEqual(res, { lost: false, path: "src/a.txt", lines: ANCHOR_LINES });
+});
+
+test("file created on a merged feature branch is live, not file-deleted", (t) => {
+  // Regression: the same broken first-parent step made a file that no commit
+  // ever deleted report lost: file-deleted.
+  const repo = makeRepo(t);
+  write(repo, "src/other.txt", ["base"]);
+  commit(repo, "base");
+  git(repo, "checkout", "-q", "-b", "feature");
+  write(repo, "src/new.txt", baseFile());
+  const asOf = commit(repo, "feature: add new file");
+  git(repo, "checkout", "-q", "main");
+  write(repo, "src/other.txt", ["base", "main work"]);
+  commit(repo, "main: unrelated");
+  git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
+  const res = traceRange(repo, { path: "src/new.txt", lines: ANCHOR_LINES, asOf });
+  assert.deepEqual(res, { lost: false, path: "src/new.txt", lines: ANCHOR_LINES });
+});
+
+test("as_of on a feature branch: main-side edits above arrive via the merge step", (t) => {
+  const repo = makeRepo(t);
+  write(repo, "src/a.txt", baseFile());
+  commit(repo, "base");
+  git(repo, "checkout", "-q", "-b", "feature");
+  write(repo, "src/b.txt", ["feature work"]);
+  const asOf = commit(repo, "feature: unrelated file");
+  git(repo, "checkout", "-q", "main");
+  write(repo, "src/a.txt", [...seq("main-inserted", 3), ...baseFile()]);
+  commit(repo, "main: insert 3 above the range");
+  git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
+  const res = traceRange(repo, { path: "src/a.txt", lines: ANCHOR_LINES, asOf });
+  assert.deepEqual(res, {
+    lost: false,
+    path: "src/a.txt",
+    lines: { start: FN_START + 3, end: FN_END + 3 },
+  });
+});
+
+test("as_of several commits deep on a feature branch merged after main advances", (t) => {
+  const repo = makeRepo(t);
+  write(repo, "src/a.txt", baseFile());
+  commit(repo, "base");
+  git(repo, "checkout", "-q", "-b", "feature");
+  write(repo, "src/a.txt", [...seq("feat-top", 2), ...baseFile()]);
+  const asOf = commit(repo, "feature: insert 2 above");
+  write(repo, "src/a.txt", [...seq("more", 3), ...seq("feat-top", 2), ...baseFile()]);
+  commit(repo, "feature: insert 3 more above");
+  git(repo, "checkout", "-q", "main");
+  write(repo, "src/other.txt", ["main work"]);
+  commit(repo, "main: unrelated");
+  git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
+  // At asOf the fn range sits at 13-17 (two lines inserted above); the later
+  // feature commit shifts it three further down, the merge not at all.
+  const res = traceRange(repo, {
+    path: "src/a.txt",
+    lines: { start: FN_START + 2, end: FN_END + 2 },
+    asOf,
+  });
   assert.deepEqual(res, {
     lost: false,
     path: "src/a.txt",

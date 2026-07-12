@@ -30,10 +30,23 @@ range forward. Observed failure modes:
 Conclusion: `-L` answers "how did these HEAD lines evolve?" (archaeology,
 useful for `why dig`) — not "where did these as_of lines go?" (liveness).
 
-**What shipped instead** (`src/trace-range.ts`): walk the first-parent commit
-sequence `as_of..HEAD`; per step, `git diff --name-status --find-renames`
-classifies the tracked file's fate (modified / renamed / deleted / type-
-changed) and zero-context hunks shift or kill each tracked line individually.
+**What shipped instead** (`src/trace-range.ts`): walk an explicit
+parent→child commit chain from `as_of` to HEAD (built from `git rev-list
+--ancestry-path --parents`, descending into first parents where possible);
+per step, `git diff --name-status --find-renames` classifies the tracked
+file's fate (modified / renamed / deleted / type-changed) and zero-context
+hunks shift or kill each tracked line individually.
+
+An earlier draft walked `git rev-list --first-parent as_of..HEAD` and diffed
+consecutive listed commits — **wrong whenever `as_of` is reachable from HEAD
+only through a merge's second parent** (anchor created on a feature branch,
+branch merged: the topology `why dig` anchors will normally have). The listed
+commits are HEAD's first-parent chain, not descendants of `as_of`, so the
+first "step" diffs the feature commit against an unrelated mainline commit
+and reads branch divergence as edits: live, byte-identical lines came back
+`lost: content-rewritten`, and a file created on the branch (never deleted by
+any commit) came back `lost: file-deleted`. The explicit ancestry chain fixes
+this; both scenarios are pinned by regression tests.
 Before returning a live result, every surviving line's HEAD content is
 compared byte-for-byte against its as_of content — the never-silently-wrong
 backstop. Shrink policy for partial edits is documented in the module header
@@ -52,9 +65,10 @@ Known limits of the shipped approach (candidates for the torture test, issue
 - **Rename detection is similarity-based.** A rename plus a heavy same-commit
   edit can drop below git's threshold and appear as delete+add →
   `file-deleted`. Honest, but earlier than a human would call it.
-- **Merges are traced along first parents.** Net effect of a merge is one
-  diff step; ranges edited *conflictingly* on both sides resolve to whatever
-  the merge result says, which is correct but coarse.
+- **Each merge is one diff step against the chain-side parent.** The other
+  side's net effect (including conflict resolutions) lands in that single
+  step; ranges edited *conflictingly* on both sides resolve to whatever the
+  merge result says, which is correct but coarse.
 - **Wholesale rewrite → `lost: content-rewritten`** with no successor
   suggestion. Whether `lost` + re-dig suffices, or decisions need a
   human-confirmed successor anchor, is exactly open problem #1 — decide from
