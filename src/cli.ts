@@ -2,9 +2,11 @@
 // `why` CLI entry point. Subcommands land phase by phase — see PLAN.md.
 // DESIGN.md is the source of truth for what each subcommand must do.
 
+import { basename } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
+import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 
 export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit"] as const;
 export type Command = (typeof COMMANDS)[number];
@@ -39,13 +41,16 @@ export function usage(): string {
     "  audit    re-verify constraints; flag expired ones",
     "",
     "Options:",
-    "  --bundle <path>  bundle root to use instead of the nearest .why/",
+    "  --bundle <path>     bundle root to use instead of the nearest .why/",
+    "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
   ].join("\n");
 }
 
 interface CommandContext {
   values: Record<string, unknown>;
   positionals: string[];
+  /** Directory the command was invoked from. */
+  cwd: string;
   /** Loaded for every command that operates on a bundle. */
   bundle?: WhyBundle;
   io: CliIo;
@@ -71,9 +76,37 @@ interface CommandSpec {
   run: CommandHandler;
 }
 
+/** `why init` — scaffold `.why/` at the repo root (DESIGN.md §1, §8). */
+async function runInit({ values, cwd, io }: CommandContext): Promise<number> {
+  try {
+    const repoRoot = findRepoRoot(cwd);
+    const root = await scaffoldBundle(repoRoot);
+    const name = basename(repoRoot);
+    io.out(`Initialized empty why bundle at ${root}`);
+    if (values["capture-snippet"] === true) {
+      io.out(`CLAUDE.md: capture snippet ${await writeCaptureSnippet(repoRoot)}`);
+    }
+    io.out("");
+    io.out("Next steps:");
+    io.out(`  - serve it to agents:   npx -y @copperbox/okf-mcp --bundle ${name}=.why --writable`);
+    io.out("  - recover the backstory: why dig  (coming later — see PLAN.md)");
+    return 0;
+  } catch (e) {
+    if (e instanceof InitError) {
+      io.err(e.message);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
-  init: { options: {}, needsBundle: false, run: notImplemented("init") },
+  init: {
+    options: { "capture-snippet": { type: "boolean" } },
+    needsBundle: false,
+    run: runInit,
+  },
   lint: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("lint") },
   blame: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("blame") },
   anchor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("anchor") },
@@ -113,7 +146,7 @@ export async function main(
     return 2;
   }
 
-  const ctx: CommandContext = { values, positionals, io };
+  const ctx: CommandContext = { values, positionals, cwd, io };
   if (spec.needsBundle) {
     try {
       const root = resolveBundleRoot(cwd, values.bundle as string | undefined);
