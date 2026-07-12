@@ -92,7 +92,7 @@ export interface BlameReport {
   nearby: NearbyConcept[];
 }
 
-function parseLineRange(lines: string): LineRange | undefined {
+export function parseLineRange(lines: string): LineRange | undefined {
   const match = /^(\d+)\s*-\s*(\d+)$|^(\d+)$/.exec(lines.trim());
   if (!match) return undefined;
   const start = Number(match[1] ?? match[3]);

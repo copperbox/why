@@ -4,6 +4,7 @@
 
 import { basename } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
+import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
 import {
   BlameTargetError,
   buildBlameReport,
@@ -52,6 +53,8 @@ export function usage(): string {
     "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
     "  --json              (blame, lint) emit the results as JSON",
+    "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
+    "  --concept <id>      (anchor) re-anchor a single concept",
   ].join("\n");
 }
 
@@ -145,6 +148,27 @@ function runBlame({ values, positionals, bundle, io }: CommandContext): number {
   }
 }
 
+/** `why anchor` — re-resolve every anchor claim against HEAD (DESIGN.md §4). */
+async function runAnchor({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why anchor: takes no positional arguments — usage: why anchor [--check] [--concept <id>]");
+    return 2;
+  }
+  const check = values.check === true;
+  try {
+    const report = await resolveAnchors(bundle!, { concept: values.concept as string | undefined });
+    const written = check ? [] : await writeAnchorUpdates(bundle!, report);
+    for (const line of renderAnchorReport(report, { check, written })) io.out(line);
+    return check && report.results.some((r) => r.changed) ? 1 : 0;
+  } catch (e) {
+    if (e instanceof AnchorError) {
+      io.err(`why anchor: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
   init: {
@@ -163,7 +187,11 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     needsBundle: true,
     run: runBlame,
   },
-  anchor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("anchor") },
+  anchor: {
+    options: { ...BUNDLE_OPTIONS, check: { type: "boolean" }, concept: { type: "string" } },
+    needsBundle: true,
+    run: runAnchor,
+  },
   doctor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("doctor") },
   dig: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("dig") },
   audit: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("audit") },
