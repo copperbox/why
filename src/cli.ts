@@ -235,27 +235,25 @@ async function runDig({ values, positionals, bundle, io }: CommandContext): Prom
     const episodes = readEpisodes(raw, episodesFile);
     const bundleRoot = bundle!.root;
     const repo = dirname(bundleRoot);
-    const outDir = values.out as string | undefined;
-    const dir = outDir ?? join(bundleRoot, CACHE_DIRNAME, "evidence");
+    const outOverride = values.out as string | undefined;
+    const outDir = outOverride ?? join(bundleRoot, CACHE_DIRNAME, "evidence");
     // Packs are derived state; the default location self-ignores like the
     // anchor-index cache. An explicit --out is the user's directory to manage.
-    if (outDir === undefined) await ensureSelfIgnoringDir(join(bundleRoot, CACHE_DIRNAME));
-    await mkdir(dir, { recursive: true });
+    if (outOverride === undefined) await ensureSelfIgnoringDir(join(bundleRoot, CACHE_DIRNAME));
+    await mkdir(outDir, { recursive: true });
     for (const episode of episodes) {
       const pack = await buildEvidencePack(episode, {
         repo,
-        ...(maxChars !== undefined ? { maxChars } : {}),
-        ...(values["evidence-dir"] !== undefined
-          ? { evidenceDir: values["evidence-dir"] as string }
-          : {}),
+        maxChars,
+        evidenceDir: values["evidence-dir"] as string | undefined,
       });
-      const file = join(dir, `${pack.episodeId.replace(/[^A-Za-z0-9._-]+/g, "-")}.md`);
+      const file = join(outDir, `${pack.episodeId.replace(/[^A-Za-z0-9._-]+/g, "-")}.md`);
       await writeFile(file, pack.markdown, "utf8");
       io.out(`wrote ${file} (${pack.markdown.length} chars)`);
       for (const note of pack.unavailable) io.out(`  unavailable: ${note}`);
       for (const note of pack.clipped) io.out(`  clipped: ${note}`);
     }
-    io.out(`${episodes.length} evidence pack(s) in ${dir}`);
+    io.out(`${episodes.length} evidence pack(s) in ${outDir}`);
     return 0;
   } catch (e) {
     if (e instanceof EvidenceError) {

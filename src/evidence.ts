@@ -374,12 +374,13 @@ function renderComment(c: GhComment): string {
  * least 3 characters (so a stem like `db` can't match everything).
  */
 export function matchEvidenceFile(name: string, episode: Episode): string[] {
+  const mentionsNumber = (n: number) => new RegExp(`(?<![0-9])${n}(?![0-9])`).test(name);
   const reasons: string[] = [];
   for (const n of episode.prs) {
-    if (new RegExp(`(?<![0-9])${n}(?![0-9])`).test(name)) reasons.push(`PR #${n}`);
+    if (mentionsNumber(n)) reasons.push(`PR #${n}`);
   }
   for (const n of episode.issues) {
-    if (new RegExp(`(?<![0-9])${n}(?![0-9])`).test(name)) reasons.push(`issue #${n}`);
+    if (mentionsNumber(n)) reasons.push(`issue #${n}`);
   }
   const lower = name.toLowerCase();
   for (const path of episode.files) {
@@ -441,8 +442,9 @@ function splitPerFile(patch: string): FileDiff[] {
   const lines = patch.split("\n");
   let current: string[] | undefined;
   let path = "unknown";
+  // `current` always starts with its `diff --git` line, so defined means non-empty.
   const flush = () => {
-    if (current !== undefined && current.length > 0) {
+    if (current !== undefined) {
       out.push({ path, text: current.join("\n").trimEnd() });
     }
   };
