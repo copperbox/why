@@ -167,7 +167,7 @@ Priority order for a cold-start dig (usefulness per token): tells first, then th
 
 1. Resolve which concepts anchor a span covering the target (anchor index built by `why anchor`, cached).
 2. Expand one hop out along typed edges (`# Because of`, `# Instead of`, `# Superseded by`).
-3. Render newest-first: status glyph, title, type, date, confidence; hedge anything below `corroborated` ("likely because…", "evidence is thin:"); expired upstream constraints render as warnings with their downstream blast radius.
+3. Render newest-first: status glyph, title, type, date, confidence; hedge anything below `corroborated` (`inferred` → "likely — …", `speculative` or unstated → "speculation, thin evidence — …" — rendering never hedges less than the evidence supports); expired constraints render as warnings with their downstream blast radius. Every expired constraint in the bundle renders its warning, upstream of the matched concepts or not — the §5 payoff must never be invisible (the README example shows the Acme warning on a file no edge connects it to).
 4. No anchored concepts → say so, and list the nearest anchored concepts in the same directory rather than returning nothing.
 
 Same data over MCP: agents mount the bundle via okf-mcp and get story-of-this-code by `search_concepts` with a `resource`/anchor filter. If that proves clumsy in practice, Phase 5 considers a thin `why-mcp` wrapper exposing `blame` as a first-class tool; default is to not build it.
