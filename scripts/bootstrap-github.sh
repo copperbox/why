@@ -39,7 +39,7 @@ make_label "Sandcastle" "1d76db" "queued for the autonomous build loop"
 make_label "sandcastle:in-review" "c5def5" "parked: implemented, PR open"
 make_label "sandcastle:in-progress" "fbca04" "actively being worked"
 make_label "needs-chat" "b60205" "circuit breaker: spec needs a human chat before re-queueing"
-for n in 1 2 3 4; do
+for n in 1 2 3 4 5 6; do
   make_label "phase:$n" "0e8a16" "why build phase $n (PLAN.md)"
 done
 
