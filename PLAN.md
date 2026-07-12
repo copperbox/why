@@ -67,10 +67,13 @@ Goal: the archive stays true, and new history gets recorded at `recorded` confid
 - [ ] Merge-time capture: post-merge hook / CI job that drafts a `decision` concept from the merged PR's discussion (open problem #5) — the steady-state pipeline that eventually makes digging rare
 - [ ] CI recipes doc: `lint` + `anchor --check` as PR gates, weekly `audit`, dig-on-merge
 
-## Phase 5 — In anger
+## Phase 5 — Surfaces + in anger
 
-Goal: `why` running on a real active repo (a `~/projects` repo or a willing team's), long enough to hit the problems design can't predict.
+Goal: the why visible where people read and edit code, and `why` running on a real active repo long enough to hit the problems design can't predict.
 
+- [ ] UI data contract: versioned JSON schemas (story / coverage / graph), hedging precomputed into the data (issue 501, `phase:5`)
+- [ ] `why serve` — standalone local UI: git blame + why gutter + story panel + graph, self-contained assets (issue 502, `phase:6` — labeled a phase later so the ratchet guarantees the contract merges first)
+- [ ] VS Code extension: decorations + hover cards + story panel, pure contract consumer (issue 503, `phase:6`; a GitHub browser extension was considered and deliberately skipped — DOM-fragile, and the index-staleness problem isn't worth solving for v1)
 - [ ] Run the full loop on one real repo for several weeks of commits
 - [ ] Revisit deferred calls with usage data: `why-mcp` blame tool (DESIGN.md §7), semantic search, multi-repo/org bundles, evidence connectors
 - [ ] Write the honest retrospective: does `why blame` actually change how people work in the repo? If not, why not?
