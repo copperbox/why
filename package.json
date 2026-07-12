@@ -1,6 +1,6 @@
 {
   "name": "@copperbox/why",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Decision archaeology for codebases — recover, anchor, and audit the why behind code.",
   "type": "module",
   "license": "MIT",
@@ -25,5 +25,8 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@copperbox/okf-mcp": "^0.19.1"
   }
 }
