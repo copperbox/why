@@ -131,6 +131,15 @@ npm run sandcastle:gate   # one gate pass
 
 Everything durable is on GitHub; Ctrl-C is always safe.
 
+**Usage limits are survived, not fatal.** The build side already soft-fails
+limit-struck agents ("will retry next cycle"); the loop greps its output for
+failed-agent limit signatures and naps `SANDCASTLE_LIMIT_SLEEP` (default 900s)
+instead of busy-spinning. The gate detects the same signatures on failed
+`claude` runs and exits `LIMIT` (6), which the loop also answers with a nap.
+Aborting mid-gate is safe — round budgets live in PR comments — so the
+pipeline self-resumes within one nap interval of the window resetting, with
+no human involvement.
+
 When the loop exits with `HALTED`, the last log block lists the `needs-chat`
 issue(s). Open a chat session; its CLAUDE.md step 0 picks the agenda up from
 there. After the spec is rewritten and the label swapped back to `Sandcastle`,
