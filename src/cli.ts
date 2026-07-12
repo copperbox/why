@@ -233,12 +233,13 @@ async function runDig({ values, positionals, bundle, io }: CommandContext): Prom
   }
   try {
     const episodes = readEpisodes(raw, episodesFile);
-    const repo = dirname(bundle!.root);
+    const bundleRoot = bundle!.root;
+    const repo = dirname(bundleRoot);
     const outDir = values.out as string | undefined;
-    const dir = outDir ?? join(bundle!.root, CACHE_DIRNAME, "evidence");
+    const dir = outDir ?? join(bundleRoot, CACHE_DIRNAME, "evidence");
     // Packs are derived state; the default location self-ignores like the
     // anchor-index cache. An explicit --out is the user's directory to manage.
-    if (outDir === undefined) await ensureSelfIgnoringDir(join(bundle!.root, CACHE_DIRNAME));
+    if (outDir === undefined) await ensureSelfIgnoringDir(join(bundleRoot, CACHE_DIRNAME));
     await mkdir(dir, { recursive: true });
     for (const episode of episodes) {
       const pack = await buildEvidencePack(episode, {

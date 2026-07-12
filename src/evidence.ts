@@ -71,12 +71,12 @@ export function readEpisodes(raw: string, source: string): Episode[] {
   } catch (e) {
     throw new EvidenceError(`${source}: not valid JSON: ${e instanceof Error ? e.message : e}`);
   }
-  const list = Array.isArray(json)
-    ? json
-    : isRecord(json) && Array.isArray(json.episodes)
-      ? json.episodes
-      : undefined;
-  if (list === undefined) {
+  let list: unknown[];
+  if (Array.isArray(json)) {
+    list = json;
+  } else if (isRecord(json) && Array.isArray(json.episodes)) {
+    list = json.episodes;
+  } else {
     throw new EvidenceError(`${source}: expected an array of episodes or {"episodes": [...]}`);
   }
   return list.map((entry, i) => readEpisode(entry, `${source}: episode ${i}`));
@@ -85,12 +85,14 @@ export function readEpisodes(raw: string, source: string): Episode[] {
 function readEpisode(entry: unknown, where: string): Episode {
   if (!isRecord(entry)) throw new EvidenceError(`${where}: not an object`);
   const commits = readCommits(entry.commits, where);
-  const id =
-    typeof entry.id === "string" && entry.id !== ""
-      ? entry.id
-      : typeof entry.id === "number"
-        ? String(entry.id)
-        : commits[0]!.sha.slice(0, 7);
+  let id: string;
+  if (typeof entry.id === "string" && entry.id !== "") {
+    id = entry.id;
+  } else if (typeof entry.id === "number") {
+    id = String(entry.id);
+  } else {
+    id = commits[0]!.sha.slice(0, 7);
+  }
   return {
     id,
     commits,
@@ -199,7 +201,9 @@ export async function buildEvidencePack(
       body = [`- author: ${author}`, `- date: ${date}`, "", message.join("\n").trimEnd()].join("\n");
     } else {
       body = note(`commit ${commit.sha} — not found in this repository`);
-      if (commit.message !== undefined) body += `\n\nMessage as recorded by --episodes:\n\n${commit.message.trimEnd()}`;
+      if (commit.message !== undefined) {
+        body += `\n\nMessage as recorded by --episodes:\n\n${commit.message.trimEnd()}`;
+      }
     }
     blocks.push({
       text: `${i === 0 ? "## Commits\n\n" : ""}### commit ${sha7}\n\n${body}\n`,
@@ -336,7 +340,9 @@ function renderThread(
     // gh's `reviews` carry the review-thread verdicts and their top-level
     // bodies; bodyless "COMMENTED" entries are noise and are dropped.
     const reviews = asComments(data.reviews).filter(
-      (r) => (r.body ?? "").trim() !== "" || (r.state !== undefined && r.state !== "COMMENTED"),
+      (review) =>
+        (review.body ?? "").trim() !== "" ||
+        (review.state !== undefined && review.state !== "COMMENTED"),
     );
     if (reviews.length > 0) {
       lines.push("", "Reviews:", "");
