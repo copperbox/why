@@ -168,6 +168,13 @@ function readAnchors(value: unknown, push: (field: string, message: string) => v
   return anchors;
 }
 
+/** The frontmatter key each verify method requires its detail under. */
+const VERIFY_DETAIL_KEYS: Record<VerifyMethod, "check" | "ask" | "review_by"> = {
+  check: "check",
+  ask: "ask",
+  "review-by": "review_by",
+};
+
 function readVerify(
   value: unknown,
   push: (field: string, message: string) => void,
@@ -182,13 +189,13 @@ function readVerify(
     return undefined;
   }
   const spec: VerifySpec = { method: method as VerifyMethod };
-  const detailKey = method === "check" ? "check" : method === "ask" ? "ask" : "review_by";
+  const detailKey = VERIFY_DETAIL_KEYS[spec.method];
   const detail = asStringy(value[detailKey]);
   if (detail === undefined) {
     push(`why.verify.${detailKey}`, `method "${spec.method}" requires a "${detailKey}" value`);
-  } else if (detailKey === "check") spec.check = detail;
-  else if (detailKey === "ask") spec.ask = detail;
-  else spec.review_by = detail;
+  } else {
+    spec[detailKey] = detail;
+  }
   return spec;
 }
 

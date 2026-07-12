@@ -23,28 +23,6 @@ const BUNDLE_OPTIONS = {
   bundle: { type: "string" },
 } as const satisfies CommandOptions;
 
-// Per-command flags, parsed strictly: an unknown flag is a usage error.
-// `init` creates the bundle, so it takes no --bundle and skips discovery.
-const COMMAND_OPTIONS: Record<Command, CommandOptions> = {
-  init: {},
-  lint: BUNDLE_OPTIONS,
-  blame: BUNDLE_OPTIONS,
-  anchor: BUNDLE_OPTIONS,
-  doctor: BUNDLE_OPTIONS,
-  dig: BUNDLE_OPTIONS,
-  audit: BUNDLE_OPTIONS,
-};
-
-const NEEDS_BUNDLE: Record<Command, boolean> = {
-  init: false,
-  lint: true,
-  blame: true,
-  anchor: true,
-  doctor: true,
-  dig: true,
-  audit: true,
-};
-
 export function usage(): string {
   return [
     "why — decision archaeology for codebases",
@@ -85,14 +63,23 @@ function notImplemented(cmd: Command): CommandHandler {
   };
 }
 
-const HANDLERS: Record<Command, CommandHandler> = {
-  init: notImplemented("init"),
-  lint: notImplemented("lint"),
-  blame: notImplemented("blame"),
-  anchor: notImplemented("anchor"),
-  doctor: notImplemented("doctor"),
-  dig: notImplemented("dig"),
-  audit: notImplemented("audit"),
+interface CommandSpec {
+  /** Flags parsed strictly: an unknown flag is a usage error. */
+  options: CommandOptions;
+  /** Whether to discover and load a bundle before running the handler. */
+  needsBundle: boolean;
+  run: CommandHandler;
+}
+
+// `init` creates the bundle, so it takes no --bundle and skips discovery.
+const COMMAND_SPECS: Record<Command, CommandSpec> = {
+  init: { options: {}, needsBundle: false, run: notImplemented("init") },
+  lint: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("lint") },
+  blame: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("blame") },
+  anchor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("anchor") },
+  doctor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("doctor") },
+  dig: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("dig") },
+  audit: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("audit") },
 };
 
 /** Exit codes: 0 ok, 1 operational error (e.g. no bundle), 2 usage/unimplemented. */
@@ -111,13 +98,14 @@ export async function main(
     return 2;
   }
   const command = cmd as Command;
+  const spec = COMMAND_SPECS[command];
 
   let values: Record<string, unknown>;
   let positionals: string[];
   try {
     ({ values, positionals } = parseArgs({
       args: argv.slice(1),
-      options: COMMAND_OPTIONS[command],
+      options: spec.options,
       allowPositionals: true,
     }));
   } catch (e) {
@@ -126,7 +114,7 @@ export async function main(
   }
 
   const ctx: CommandContext = { values, positionals, io };
-  if (NEEDS_BUNDLE[command]) {
+  if (spec.needsBundle) {
     try {
       const root = resolveBundleRoot(cwd, values.bundle as string | undefined);
       ctx.bundle = await loadBundle(root);
@@ -138,7 +126,7 @@ export async function main(
       throw e;
     }
   }
-  return HANDLERS[command](ctx);
+  return spec.run(ctx);
 }
 
 const isDirectRun =

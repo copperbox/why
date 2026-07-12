@@ -87,7 +87,7 @@ Named here so we never pretend otherwise (expanded in [DESIGN.md §Open problems
 
 ## Status
 
-Pre-implementation. The schema and pipeline are specified; nothing is built yet.
+Early implementation. The schema and pipeline are specified, and the CLI foundation exists: `why <command>` dispatches all seven subcommands, discovers the nearest `.why/` bundle (or takes `--bundle <path>`), and loads it through okf-mcp with schema-aware validation of the `why:` frontmatter. The subcommands themselves are not implemented yet — each says so and exits 2.
 
 | File | What it is |
 |---|---|
