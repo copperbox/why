@@ -10,7 +10,7 @@ import {
   parseBlameTarget,
   renderBlameReport,
 } from "./blame.js";
-import { loadBundle, type WhyBundle } from "./bundle.js";
+import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
@@ -180,11 +180,11 @@ export async function main(
     io.out(usage());
     return 0;
   }
-  if (!(COMMANDS as readonly string[]).includes(cmd)) {
+  if (!isOneOf(COMMANDS, cmd)) {
     io.err(`why: unknown command "${cmd}"\n\n${usage()}`);
     return 2;
   }
-  const command = cmd as Command;
+  const command = cmd;
   const spec = COMMAND_SPECS[command];
 
   let values: Record<string, unknown>;

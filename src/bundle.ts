@@ -112,6 +112,11 @@ function isPlainMap(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Vocabulary membership as a type guard, so callers narrow instead of casting. */
+export function isOneOf<T extends string>(vocab: readonly T[], value: unknown): value is T {
+  return (vocab as readonly unknown[]).includes(value);
+}
+
 /** YAML reads a bare `31` or all-digit sha as a number; both mean the string. */
 function asStringy(value: unknown): string | undefined {
   if (typeof value === "string") return value;
@@ -157,8 +162,8 @@ function readAnchors(value: unknown, push: (field: string, message: string) => v
       else anchor.as_of = asOf;
     }
     if (entry.state !== undefined) {
-      if ((ANCHOR_STATES as readonly unknown[]).includes(entry.state)) {
-        anchor.state = entry.state as AnchorState;
+      if (isOneOf(ANCHOR_STATES, entry.state)) {
+        anchor.state = entry.state;
       } else {
         push(`${at}.state`, `"${String(entry.state)}" is not an anchor state: allowed values are ${list(ANCHOR_STATES)}`);
       }
@@ -184,11 +189,11 @@ function readVerify(
     return undefined;
   }
   const method = value.method;
-  if (!(VERIFY_METHODS as readonly unknown[]).includes(method)) {
+  if (!isOneOf(VERIFY_METHODS, method)) {
     push("why.verify.method", `"${String(method)}" is not a verify method: allowed values are ${list(VERIFY_METHODS)}`);
     return undefined;
   }
-  const spec: VerifySpec = { method: method as VerifyMethod };
+  const spec: VerifySpec = { method };
   const detailKey = VERIFY_DETAIL_KEYS[spec.method];
   const detail = asStringy(value[detailKey]);
   if (detail === undefined) {
@@ -223,7 +228,7 @@ function readWhyMeta(
       push("why.status", "must be a string");
     } else {
       meta.status = status;
-      const vocab = STATUS_VOCAB[frontmatter.type as ConceptType];
+      const vocab = isOneOf(CONCEPT_TYPES, frontmatter.type) ? STATUS_VOCAB[frontmatter.type] : undefined;
       if (vocab && !vocab.includes(status)) {
         push("why.status", `"${status}" is not a ${frontmatter.type} status: allowed values are ${list(vocab)}`);
       }
@@ -237,8 +242,8 @@ function readWhyMeta(
     }
   }
   if (raw.confidence !== undefined) {
-    if ((CONFIDENCE_LEVELS as readonly unknown[]).includes(raw.confidence)) {
-      meta.confidence = raw.confidence as Confidence;
+    if (isOneOf(CONFIDENCE_LEVELS, raw.confidence)) {
+      meta.confidence = raw.confidence;
     } else {
       push("why.confidence", `"${String(raw.confidence)}" is not a confidence level: allowed values are ${list(CONFIDENCE_LEVELS)}`);
     }

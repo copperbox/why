@@ -5,7 +5,14 @@
 // types, and status/section consistency (§3).
 
 import { validateBundle } from "@copperbox/okf-mcp";
-import { STATUS_VOCAB, type ConceptType, type WhyBundle, type WhyConcept } from "./bundle.js";
+import {
+  CONCEPT_TYPES,
+  isOneOf,
+  STATUS_VOCAB,
+  type ConceptType,
+  type WhyBundle,
+  type WhyConcept,
+} from "./bundle.js";
 
 export type Severity = "error" | "warning";
 
@@ -110,7 +117,7 @@ function lintConcept(bundle: WhyBundle, concept: WhyConcept, push: Push): void {
     const edge = link.section === undefined ? undefined : EDGE_TARGETS[link.section.toLowerCase()];
     if (edge === undefined || link.resolvedId === undefined) continue;
     const targetType = bundle.concepts.get(link.resolvedId)?.frontmatter.type;
-    if (targetType !== undefined && !(edge.allowed as readonly string[]).includes(targetType)) {
+    if (targetType !== undefined && !isOneOf(edge.allowed, targetType)) {
       push(edge.rule, "error", `"# ${link.section}" links to ${link.target}, a ${targetType} — allowed targets: ${edge.allowed.join(", ")}`);
     }
   }
@@ -122,7 +129,7 @@ function lintConcept(bundle: WhyBundle, concept: WhyConcept, push: Push): void {
   }
   // The reverse direction only where the type's vocab admits "superseded" —
   // the §3 table allows the section on constraints, whose vocab does not.
-  const vocab = STATUS_VOCAB[type as ConceptType];
+  const vocab = isOneOf(CONCEPT_TYPES, type) ? STATUS_VOCAB[type] : undefined;
   if (supersededLinks.length > 0 && why.status !== "superseded" && vocab !== undefined && vocab.includes("superseded")) {
     const actual = why.status === undefined ? "unset" : `"${why.status}"`;
     push("W401", "error", `a "# Superseded by" section requires status "superseded" (status is ${actual})`);
