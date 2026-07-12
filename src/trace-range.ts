@@ -171,12 +171,14 @@ function applyHunks(lines: TrackedLine[], hunks: Hunk[]): TrackedLine[] {
       if (h.oldCount === 0) {
         // Pure insertion after old line `oldStart` (0 = top of file).
         if (h.oldStart < line.cur) delta += h.newCount;
-      } else if (line.cur >= h.oldStart && line.cur <= h.oldStart + h.oldCount - 1) {
+        continue;
+      }
+      const oldEnd = h.oldStart + h.oldCount - 1;
+      if (line.cur >= h.oldStart && line.cur <= oldEnd) {
         killed = true;
         break;
-      } else if (line.cur > h.oldStart + h.oldCount - 1) {
-        delta += h.newCount - h.oldCount;
       }
+      if (line.cur > oldEnd) delta += h.newCount - h.oldCount;
     }
     if (!killed) survivors.push({ orig: line.orig, cur: line.cur + delta });
   }

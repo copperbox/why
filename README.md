@@ -87,11 +87,12 @@ Named here so we never pretend otherwise (expanded in [DESIGN.md §Open problems
 
 ## Status
 
-Pre-implementation. The schema and pipeline are specified; nothing is built yet.
+Early implementation. The schema and pipeline are specified; the first piece of the liveness layer is built and tested — a blame-trace resolver ([src/trace-range.ts](src/trace-range.ts)) that traces an anchored line range from its as-of commit to HEAD, or proves it `lost`. Everything else is still spec.
 
 | File | What it is |
 |---|---|
 | [DESIGN.md](DESIGN.md) | Full schema and architecture spec — the source of truth |
+| [NOTES.md](NOTES.md) | Implementation findings that feed DESIGN.md decisions |
 | [PLAN.md](PLAN.md) | Phased roadmap in session-sized tasks, plus the working protocol for future sessions |
 | [CLAUDE.md](CLAUDE.md) | Orientation for agent sessions in this repo |
 | [examples/harbor/](examples/harbor/) | A hand-authored example bundle for a fictional service — the schema, fully realized in six concepts |
