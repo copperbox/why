@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import { AnchorError, GitView } from "./anchor.js";
 import { anchorSpan } from "./blame.js";
 import type { Anchor, WhyBundle } from "./bundle.js";
-import { DigStateError, readDigState } from "./dig-state.js";
+import { DigStateError, readDigState, type DigState } from "./dig-state.js";
 import { git as runGit } from "./git.js";
 import { lintBundle, type Finding } from "./lint.js";
 
@@ -115,7 +115,7 @@ async function digStateHealth(
   git: GitView | undefined,
   gitUnavailable: string | undefined,
 ): Promise<DigStateHealth> {
-  let state;
+  let state: DigState | undefined;
   try {
     state = await readDigState(bundleRoot);
   } catch (e) {

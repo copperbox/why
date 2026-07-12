@@ -5,8 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { main } from "../src/cli.ts";
 import { DIG_STATE_FILENAME, DIG_STATE_VERSION, writeDigState } from "../src/dig-state.ts";

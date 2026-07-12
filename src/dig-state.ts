@@ -64,18 +64,19 @@ export async function readDigState(bundleRoot: string): Promise<DigState | undef
         `${DIG_STATE_VERSION} — a newer why may have written it. Inspect it, or ${DELETE_HINT}`,
     );
   }
-  const branches = parsed.branches;
-  if (!isPlainMap(branches)) {
+  if (!isPlainMap(parsed.branches)) {
     throw new DigStateError(`dig state ${path} has no branches map — inspect it, or ${DELETE_HINT}`);
   }
-  for (const [branch, mark] of Object.entries(branches)) {
+  const branches: Record<string, BranchMark> = {};
+  for (const [branch, mark] of Object.entries(parsed.branches)) {
     if (!isPlainMap(mark) || typeof mark.lastProcessed !== "string") {
       throw new DigStateError(
         `dig state ${path} entry for branch "${branch}" has no lastProcessed sha — inspect it, or ${DELETE_HINT}`,
       );
     }
+    branches[branch] = { lastProcessed: mark.lastProcessed };
   }
-  return { version: DIG_STATE_VERSION, branches: branches as unknown as Record<string, BranchMark> };
+  return { version: DIG_STATE_VERSION, branches };
 }
 
 /** Write the state atomically (temp + same-directory rename), branches sorted. */
