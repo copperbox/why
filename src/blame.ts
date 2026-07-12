@@ -1,18 +1,25 @@
-// `why blame` (static, DESIGN.md §7): match anchors to a target span, expand
-// one hop along typed edges, render the story. Phase 1 trusts anchors as
-// written — no re-resolution — but a `lost` anchor is a claim that no longer
-// holds, so it never matches: anchors are live or lost, never silently wrong.
+// `why blame` (static, DESIGN.md §7): match anchors to a target span via the
+// anchor index, expand one hop along typed edges, render the story. Blame
+// trusts anchors as written — no re-resolution — but a `lost` anchor is a
+// claim that no longer holds, so it never matches: anchors are live or lost,
+// never silently wrong.
 
 import { deriveTitle, extractCitations } from "@copperbox/okf-mcp";
+import {
+  buildAnchorIndex,
+  lookupAnchors,
+  parseLineRange,
+  type AnchorHit,
+  type AnchorIndex,
+  type LineRange,
+} from "./anchors.js";
 import type { Anchor, Confidence, WhyBundle, WhyConcept } from "./bundle.js";
+
+export { parseLineRange } from "./anchors.js";
+export type { LineRange } from "./anchors.js";
 
 /** The target spec was malformed — a usage error, not an operational one. */
 export class BlameTargetError extends Error {}
-
-export interface LineRange {
-  start: number;
-  end: number;
-}
 
 export interface BlameTarget {
   path: string;
@@ -90,23 +97,6 @@ export interface BlameReport {
   warnings: BlameBlock[];
   /** When nothing matches: anchored concepts nearest the target's directory. */
   nearby: NearbyConcept[];
-}
-
-export function parseLineRange(lines: string): LineRange | undefined {
-  const match = /^(\d+)\s*-\s*(\d+)$|^(\d+)$/.exec(lines.trim());
-  if (!match) return undefined;
-  const start = Number(match[1] ?? match[3]);
-  const end = Number(match[2] ?? match[3]);
-  return start >= 1 && end >= start ? { start, end } : undefined;
-}
-
-function anchorCovers(anchor: Anchor, target: BlameTarget): boolean {
-  if (anchor.state === "lost") return false; // a last-known location, not a live claim
-  if (anchor.path !== target.path) return false;
-  if (!target.lines || anchor.lines === undefined) return true;
-  const range = parseLineRange(anchor.lines);
-  if (!range) return false; // an unparseable span cannot verifiably cover the target
-  return range.start <= target.lines.end && target.lines.start <= range.end;
 }
 
 function newestFirst(a: WhyConcept, b: WhyConcept): number {
@@ -224,12 +214,27 @@ function spanOf(anchors: Anchor[]): string | undefined {
   return `${anchor.path}${lines}${symbol}`;
 }
 
-export function buildBlameReport(bundle: WhyBundle, target: BlameTarget): BlameReport {
-  const matched: Array<{ concept: WhyConcept; anchors: Anchor[] }> = [];
-  for (const concept of bundle.concepts.values()) {
-    const covering = concept.why.anchors.filter((anchor) => anchorCovers(anchor, target));
-    if (covering.length > 0) matched.push({ concept, anchors: covering });
+export function buildBlameReport(
+  bundle: WhyBundle,
+  target: BlameTarget,
+  index: AnchorIndex = buildAnchorIndex(bundle),
+): BlameReport {
+  const hitsByConcept = new Map<string, AnchorHit[]>();
+  for (const hit of lookupAnchors(index, target)) {
+    const hits = hitsByConcept.get(hit.conceptId);
+    if (hits) hits.push(hit);
+    else hitsByConcept.set(hit.conceptId, [hit]);
   }
+  const matched = [...hitsByConcept.entries()].map(([id, hits]) => {
+    const concept = bundle.concepts.get(id);
+    if (!concept) {
+      // The cache key ties an index to exact bundle contents; disagreeing
+      // here means the caller mixed an index with some other bundle.
+      throw new Error(`anchor index names unknown concept "${id}" — it was not built from this bundle`);
+    }
+    hits.sort((a, b) => a.anchorIndex - b.anchorIndex); // anchors in written order
+    return { concept, anchors: hits.map((hit) => hit.anchor) };
+  });
   matched.sort((a, b) => newestFirst(a.concept, b.concept));
 
   const matches = matched.map(({ concept, anchors }) => toBlock(bundle, concept, anchors));

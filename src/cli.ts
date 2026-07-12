@@ -5,6 +5,7 @@
 import { basename } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
+import { loadAnchorIndex } from "./anchors.js";
 import {
   BlameTargetError,
   buildBlameReport,
@@ -127,13 +128,15 @@ async function runLint({ values, bundle, io }: CommandContext): Promise<number> 
 }
 
 /** `why blame` — the story behind a file or line range (DESIGN.md §7, static). */
-function runBlame({ values, positionals, bundle, io }: CommandContext): number {
+async function runBlame({ values, positionals, bundle, io }: CommandContext): Promise<number> {
   if (positionals.length !== 1) {
     io.err("why blame: expected exactly one target — usage: why blame <path>[:line[-line]]");
     return 2;
   }
   try {
-    const report = buildBlameReport(bundle!, parseBlameTarget(positionals[0]!));
+    const target = parseBlameTarget(positionals[0]!);
+    const { index } = await loadAnchorIndex(bundle!);
+    const report = buildBlameReport(bundle!, target, index);
     if (values.json === true) {
       io.out(JSON.stringify(report, null, 2));
     } else {
