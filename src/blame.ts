@@ -15,6 +15,7 @@ import {
 } from "./anchors.js";
 import type { Anchor, Confidence, WhyBundle, WhyConcept } from "./bundle.js";
 
+export { parseLineRange } from "./anchors.js";
 export type { LineRange } from "./anchors.js";
 
 /** The target spec was malformed — a usage error, not an operational one. */
@@ -38,7 +39,7 @@ export function parseBlameTarget(spec: string): BlameTarget {
   return { path: normalizePath(match[1]!), lines: { start, end } };
 }
 
-function normalizePath(path: string): string {
+export function normalizePath(path: string): string {
   return path.replace(/^\.\//, "");
 }
 
@@ -320,7 +321,8 @@ function renderBlock(block: BlameBlock): string[] {
   return lines;
 }
 
-function anchorSpan(anchor: Anchor): string {
+/** `path[:lines]` — also the span format `why anchor` and `why doctor` print. */
+export function anchorSpan(anchor: Pick<Anchor, "path" | "lines">): string {
   return anchor.lines === undefined ? anchor.path : `${anchor.path}:${anchor.lines}`;
 }
 

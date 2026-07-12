@@ -108,7 +108,7 @@ export interface WhyBundle {
 
 const WHY_KEYS = new Set(["status", "happened_on", "expired_on", "confidence", "anchors", "verify"]);
 
-function isPlainMap(value: unknown): value is Record<string, unknown> {
+export function isPlainMap(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
