@@ -2,10 +2,11 @@
 // `why` CLI entry point. Subcommands land phase by phase — see PLAN.md.
 // DESIGN.md is the source of truth for what each subcommand must do.
 
-import { basename } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
-import { loadAnchorIndex } from "./anchors.js";
+import { CACHE_DIRNAME, ensureSelfIgnoringDir, loadAnchorIndex } from "./anchors.js";
 import {
   BlameTargetError,
   buildBlameReport,
@@ -15,6 +16,7 @@ import {
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
+import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
 
@@ -57,6 +59,10 @@ export function usage(): string {
     "  --json              (blame, lint, doctor) emit the results as JSON",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
+    "  --evidence <file>   (dig) assemble evidence packs from an --episodes JSON file",
+    "  --evidence-dir <dir>  (dig) merge in local exported context (postmortems, chats)",
+    "  --max-chars <n>     (dig) total size budget per evidence pack",
+    "  --out <dir>         (dig) pack output dir (default <bundle>/.cache/evidence)",
   ].join("\n");
 }
 
@@ -188,6 +194,77 @@ async function runDoctor({ values, positionals, bundle, io }: CommandContext): P
   return report.healthy ? 0 : 1;
 }
 
+/**
+ * `why dig --evidence <episodes.json>` — assemble one evidence pack per
+ * episode (DESIGN.md §6 step 2). `--episodes` extraction is a later issue;
+ * until it lands the episodes JSON comes from wherever the caller got it.
+ */
+async function runDig({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  const usageLine =
+    "usage: why dig --evidence <episodes.json> [--evidence-dir <dir>] [--max-chars <n>] [--out <dir>]";
+  if (positionals.length > 0) {
+    io.err(`why dig: takes no positional arguments — ${usageLine}`);
+    return 2;
+  }
+  if (values.episodes === true) {
+    io.err("why dig --episodes: not implemented yet (see PLAN.md for the phase that delivers it)");
+    return 2;
+  }
+  const episodesFile = values.evidence as string | undefined;
+  if (episodesFile === undefined) {
+    io.err(`why dig: pass a mode — ${usageLine}`);
+    return 2;
+  }
+  let maxChars: number | undefined;
+  if (values["max-chars"] !== undefined) {
+    maxChars = Number(values["max-chars"]);
+    if (!Number.isInteger(maxChars) || maxChars <= 0) {
+      io.err(`why dig: --max-chars must be a positive integer, got "${values["max-chars"]}"`);
+      return 2;
+    }
+  }
+
+  let raw: string;
+  try {
+    raw = await readFile(episodesFile, "utf8");
+  } catch {
+    io.err(`why dig: cannot read episodes file ${episodesFile}`);
+    return 1;
+  }
+  try {
+    const episodes = readEpisodes(raw, episodesFile);
+    const repo = dirname(bundle!.root);
+    const outDir = values.out as string | undefined;
+    const dir = outDir ?? join(bundle!.root, CACHE_DIRNAME, "evidence");
+    // Packs are derived state; the default location self-ignores like the
+    // anchor-index cache. An explicit --out is the user's directory to manage.
+    if (outDir === undefined) await ensureSelfIgnoringDir(join(bundle!.root, CACHE_DIRNAME));
+    await mkdir(dir, { recursive: true });
+    for (const episode of episodes) {
+      const pack = await buildEvidencePack(episode, {
+        repo,
+        ...(maxChars !== undefined ? { maxChars } : {}),
+        ...(values["evidence-dir"] !== undefined
+          ? { evidenceDir: values["evidence-dir"] as string }
+          : {}),
+      });
+      const file = join(dir, `${pack.episodeId.replace(/[^A-Za-z0-9._-]+/g, "-")}.md`);
+      await writeFile(file, pack.markdown, "utf8");
+      io.out(`wrote ${file} (${pack.markdown.length} chars)`);
+      for (const note of pack.unavailable) io.out(`  unavailable: ${note}`);
+      for (const note of pack.clipped) io.out(`  clipped: ${note}`);
+    }
+    io.out(`${episodes.length} evidence pack(s) in ${dir}`);
+    return 0;
+  } catch (e) {
+    if (e instanceof EvidenceError) {
+      io.err(`why dig: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
   init: {
@@ -216,7 +293,18 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     needsBundle: true,
     run: runDoctor,
   },
-  dig: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("dig") },
+  dig: {
+    options: {
+      ...BUNDLE_OPTIONS,
+      episodes: { type: "boolean" },
+      evidence: { type: "string" },
+      "evidence-dir": { type: "string" },
+      "max-chars": { type: "string" },
+      out: { type: "string" },
+    },
+    needsBundle: true,
+    run: runDig,
+  },
   audit: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("audit") },
 };
 
