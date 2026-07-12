@@ -28,6 +28,23 @@ export function gitOrThrow(repo: string, args: string[]): string {
   return r.stdout;
 }
 
+/**
+ * Resolve an anchor's `as_of` to a full commit sha. Both resolvers share the
+ * same precondition: the claim is only traceable forward if `as_of` is an
+ * ancestor of HEAD.
+ */
+export function resolveAsOfCommit(repo: string, asOf: string): string {
+  const rev = git(repo, ["rev-parse", "--verify", "--quiet", `${asOf}^{commit}`]);
+  if (rev.status !== 0) {
+    throw new Error(`as_of "${asOf}" does not resolve to a commit in ${repo}`);
+  }
+  const sha = rev.stdout.trim();
+  if (git(repo, ["merge-base", "--is-ancestor", sha, "HEAD"]).status !== 0) {
+    throw new Error(`as_of ${asOf} is not an ancestor of HEAD; cannot resolve forward from it`);
+  }
+  return sha;
+}
+
 /** Raw file content at rev, or null if the path is absent. */
 export function showFile(repo: string, rev: string, path: string): string | null {
   const r = git(repo, ["show", `${rev}:${path}`]);

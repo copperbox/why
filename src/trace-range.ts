@@ -30,7 +30,7 @@
 // check, the result is `lost: "content-rewritten"`. A wrong range cannot be
 // emitted by hunk-math bugs alone — it would have to survive this check too.
 
-import { git, gitOrThrow, showLines } from "./git.js";
+import { gitOrThrow, resolveAsOfCommit, showLines } from "./git.js";
 
 export interface LineRange {
   /** 1-based, inclusive. */
@@ -168,15 +168,7 @@ export function traceRange(repo: string, anchor: RangeAnchor): TraceResult {
     throw new Error(`invalid line range ${lines.start}-${lines.end} (need 1 <= start <= end)`);
   }
 
-  const rev = git(repo, ["rev-parse", "--verify", "--quiet", `${asOf}^{commit}`]);
-  if (rev.status !== 0) {
-    throw new Error(`as_of "${asOf}" does not resolve to a commit in ${repo}`);
-  }
-  const asOfSha = rev.stdout.trim();
-
-  if (git(repo, ["merge-base", "--is-ancestor", asOfSha, "HEAD"]).status !== 0) {
-    throw new Error(`as_of ${asOf} is not an ancestor of HEAD; cannot trace forward`);
-  }
+  const asOfSha = resolveAsOfCommit(repo, asOf);
 
   const origLines = showLines(repo, asOfSha, path);
   if (origLines === null) {

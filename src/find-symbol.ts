@@ -25,7 +25,7 @@
 import { createRequire } from "node:module";
 import { dirname, extname, join } from "node:path";
 import Parser from "web-tree-sitter";
-import { git, gitOrThrow, showFile } from "./git.js";
+import { git, gitOrThrow, resolveAsOfCommit, showFile } from "./git.js";
 import type { LineRange } from "./trace-range.js";
 
 export interface SymbolAnchor {
@@ -146,6 +146,8 @@ function loadLanguage(grammar: string): Promise<Parser.Language> {
 
 function nodeSpan(node: Parser.SyntaxNode): LineRange {
   const start = node.startPosition.row + 1;
+  // Tree-sitter end positions are exclusive: ending at column 0 means the
+  // node really ends with the previous line's newline.
   const end = node.endPosition.column === 0 ? node.endPosition.row : node.endPosition.row + 1;
   return { start, end: Math.max(start, end) };
 }
@@ -302,14 +304,7 @@ export async function findSymbol(repo: string, anchor: SymbolAnchor): Promise<Fi
     throw new Error("symbol must be non-empty");
   }
 
-  const rev = git(repo, ["rev-parse", "--verify", "--quiet", `${asOf}^{commit}`]);
-  if (rev.status !== 0) {
-    throw new Error(`as_of "${asOf}" does not resolve to a commit in ${repo}`);
-  }
-  const asOfSha = rev.stdout.trim();
-  if (git(repo, ["merge-base", "--is-ancestor", asOfSha, "HEAD"]).status !== 0) {
-    throw new Error(`as_of ${asOf} is not an ancestor of HEAD; cannot resolve against it`);
-  }
+  const asOfSha = resolveAsOfCommit(repo, asOf);
 
   // Step 1: the anchored file itself, at HEAD.
   const sameFile = await matchesInFile(repo, path, symbol);
@@ -319,7 +314,7 @@ export async function findSymbol(repo: string, anchor: SymbolAnchor): Promise<Fi
   }
 
   // Step 2: only files git history connects to the original path.
-  const hits: { path: string; matches: LineRange[]; confidence: SymbolConfidence }[] = [];
+  const hits: Array<FileMatches & { path: string }> = [];
   for (const candidate of grepCandidates(repo, symbol)) {
     if (candidate === path) continue;
     const m = await matchesInFile(repo, candidate, symbol);
