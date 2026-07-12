@@ -15,7 +15,13 @@ import {
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
-import { DigError, extractEpisodes, readHighWaterMark, renderEpisodesReport } from "./dig.js";
+import {
+  DigError,
+  extractEpisodes,
+  readHighWaterMark,
+  renderEpisodesReport,
+  type EpisodesReport,
+} from "./dig.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
@@ -195,13 +201,13 @@ async function runDig({ values, positionals, bundle, cwd, io }: CommandContext):
     if (mark !== null && "note" in mark) io.err(`why dig: ${mark.note}`);
     const from = mark !== null && "sha" in mark ? mark.sha : undefined;
     const repo = dirname(bundle!.root);
-    let report;
+    let report: EpisodesReport;
     try {
-      report = extractEpisodes(repo, from === undefined ? {} : { from });
+      report = extractEpisodes(repo, { from });
     } catch (e) {
       // A mark the repo no longer knows (rebase, gc) must not brick digging:
       // re-digging everything is documented as safe, so fall back loudly.
-      if (from === undefined || !(e instanceof DigError) || !/range start/.test(e.message)) throw e;
+      if (!(e instanceof DigError) || !e.staleFrom) throw e;
       io.err(`why dig: high-water mark unusable (${e.message}) — running full history`);
       report = extractEpisodes(repo);
     }

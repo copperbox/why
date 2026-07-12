@@ -14,7 +14,18 @@ import { join } from "node:path";
 import { git, gitOrThrow } from "./git.js";
 
 /** Operational failure (bad repo, bad range) — the CLI reports it and exits 1. */
-export class DigError extends Error {}
+export class DigError extends Error {
+  /**
+   * True when the range start (`from`) is what failed — a caller holding a
+   * stored high-water mark can safely retry over full history.
+   */
+  constructor(
+    message: string,
+    readonly staleFrom = false,
+  ) {
+    super(message);
+  }
+}
 
 // --- Report shape (the stable JSON surface; see docs/dig-episodes.md) -------
 
@@ -156,9 +167,11 @@ const C = "\x01"; // commit separator
 const F = "\x1f"; // field separator
 const E = "\x1e"; // end of header
 
-function resolveCommit(repo: string, rev: string, what: string): string {
+function resolveCommit(repo: string, rev: string, what: "range start" | "range end"): string {
   const r = git(repo, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
-  if (r.status !== 0) throw new DigError(`${what} "${rev}" does not resolve to a commit`);
+  if (r.status !== 0) {
+    throw new DigError(`${what} "${rev}" does not resolve to a commit`, what === "range start");
+  }
   return r.stdout.trim();
 }
 
@@ -457,7 +470,10 @@ export function extractEpisodes(repo: string, options: DigOptions = {}): Episode
   if (options.from !== undefined) {
     from = resolveCommit(root, options.from, "range start");
     if (git(root, ["merge-base", "--is-ancestor", from, to]).status !== 0) {
-      throw new DigError(`range start ${options.from} is not an ancestor of ${options.to ?? "HEAD"}`);
+      throw new DigError(
+        `range start ${options.from} is not an ancestor of ${options.to ?? "HEAD"}`,
+        true,
+      );
     }
   }
   const range = from === null ? [to] : [`${from}..${to}`];
@@ -512,6 +528,10 @@ function day(iso: string): string {
   return iso.slice(0, 10);
 }
 
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
 function tellBadges(e: Episode): string {
   const badges: string[] = [];
   if (e.tells.reverts.length > 0) badges.push(`revert×${e.tells.reverts.length}`);
@@ -526,24 +546,23 @@ export function renderEpisodesReport(report: EpisodesReport): string[] {
   const commits = report.episodes.reduce((n, e) => n + e.commits.length, 0);
   const from = report.range.from === null ? "full history" : `${report.range.from.slice(0, 12)}..`;
   lines.push(
-    `why dig --episodes: ${report.episodes.length} episode${report.episodes.length === 1 ? "" : "s"}, ` +
-      `${commits} commit${commits === 1 ? "" : "s"} (${from} → ${report.range.to.slice(0, 12)})`,
+    `why dig --episodes: ${plural(report.episodes.length, "episode")}, ` +
+      `${plural(commits, "commit")} (${from} → ${report.range.to.slice(0, 12)})`,
   );
   lines.push("");
   for (const e of report.episodes) {
     const span = e.dates.start === e.dates.end ? day(e.dates.start) : `${day(e.dates.start)}..${day(e.dates.end)}`;
     const pr = e.pr === null ? "" : ` #${e.pr}`;
     lines.push(
-      `  ${e.id}  ${e.kind}${pr}  ${span}  ${e.commits.length} commit${e.commits.length === 1 ? "" : "s"}, ` +
-        `${e.files.length} file${e.files.length === 1 ? "" : "s"}${tellBadges(e)}`,
+      `  ${e.id}  ${e.kind}${pr}  ${span}  ${plural(e.commits.length, "commit")}, ` +
+        `${plural(e.files.length, "file")}${tellBadges(e)}`,
     );
   }
   lines.push("");
   const t = report.tells;
   lines.push(
-    `tells: ${t.reverts.count} revert${t.reverts.count === 1 ? "" : "s"}, ` +
-      `${t.fixChains.count} fix-chain${t.fixChains.count === 1 ? "" : "s"}, ` +
-      `${t.suddenChurn.count} sudden-churn, ${t.commentTells.count} comment tell${t.commentTells.count === 1 ? "" : "s"}`,
+    `tells: ${plural(t.reverts.count, "revert")}, ${plural(t.fixChains.count, "fix-chain")}, ` +
+      `${t.suddenChurn.count} sudden-churn, ${plural(t.commentTells.count, "comment tell")}`,
   );
   lines.push("(full data: --json or --out <file>; schema: docs/dig-episodes.md)");
   return lines;
