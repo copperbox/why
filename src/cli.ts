@@ -59,6 +59,8 @@ export function usage(): string {
     "  --json              (blame, lint, doctor) emit the results as JSON",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
+    "  --from <rev>        (dig --episodes) dig from <rev> instead of the recorded high-water mark",
+    "  --full              (dig --episodes) re-dig all history, ignoring the high-water mark",
     "  --evidence <file>   (dig) assemble evidence packs from an --episodes JSON file",
     "  --evidence-dir <dir>  (dig) merge in local exported context (postmortems, chats)",
     "  --max-chars <n>     (dig) total size budget per evidence pack",
@@ -206,7 +208,13 @@ async function runDig({ values, positionals, bundle, io }: CommandContext): Prom
     io.err(`why dig: takes no positional arguments — ${usageLine}`);
     return 2;
   }
+  if (values.episodes !== true && (values.from !== undefined || values.full === true)) {
+    io.err("why dig: --from/--full set the --episodes range — pass --episodes too");
+    return 2;
+  }
   if (values.episodes === true) {
+    // Extraction is issues/301; its incremental range/state layer already
+    // exists (src/dig-state.ts) and this handler will wrap it in withDigState.
     io.err("why dig --episodes: not implemented yet (see PLAN.md for the phase that delivers it)");
     return 2;
   }
@@ -296,6 +304,8 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     options: {
       ...BUNDLE_OPTIONS,
       episodes: { type: "boolean" },
+      from: { type: "string" },
+      full: { type: "boolean" },
       evidence: { type: "string" },
       "evidence-dir": { type: "string" },
       "max-chars": { type: "string" },

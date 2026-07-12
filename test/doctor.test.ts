@@ -6,7 +6,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { main } from "../src/cli.ts";
+import { DIG_STATE_FILENAME, DIG_STATE_VERSION, writeDigState } from "../src/dig-state.ts";
 import { scaffoldBundle } from "../src/init.ts";
 import { capture, git, makeBundle, makeRepo, write } from "./helpers.ts";
 
@@ -114,8 +117,9 @@ test("temp bundle: every section appears with the right count and severity, exit
 
     // The stable schema: top-level keys and section keys, in order.
     assert.deepEqual(Object.keys(report), [
-      "root", "head", "concepts", "healthy", "red", "yellow", "sections",
+      "root", "head", "digState", "concepts", "healthy", "red", "yellow", "sections",
     ]);
+    assert.equal(report.digState.status, "none", "clinic repo has never been dug");
     assert.deepEqual(Object.keys(report.sections), [...SECTION_KEYS]);
     for (const key of SECTION_KEYS) {
       const section = report.sections[key];
@@ -185,6 +189,70 @@ test("human output names every section with its count, and doctor stays read-onl
   }
 });
 
+test("doctor reports dig-state freshness: commits since last dig, one line", async () => {
+  const { repo, whyRoot, c1 } = await seedClinic();
+  try {
+    const branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD");
+
+    // Never dug: the line says so instead of silently showing nothing.
+    const none = capture();
+    await main(["doctor", "--bundle", whyRoot], repo, none.io);
+    assert.ok(
+      none.out.join("\n").includes(`dig state: none — branch ${branch} has never been dug`),
+      none.out.join("\n"),
+    );
+
+    // Mark one commit behind HEAD (c1 is the clinic's first of two commits).
+    const c1Full = git(repo, "rev-parse", c1);
+    await writeDigState(whyRoot, {
+      version: DIG_STATE_VERSION,
+      branches: { [branch]: { lastProcessed: c1Full } },
+    });
+    const behind = await doctorJson(whyRoot, repo);
+    assert.deepEqual(behind.report.digState, {
+      status: "ok",
+      branch,
+      lastProcessed: c1Full,
+      commitsSince: 1,
+    });
+    assert.equal(behind.report.red, 2, "dig-state freshness is informational, not a finding");
+    const human = capture();
+    await main(["doctor", "--bundle", whyRoot], repo, human.io);
+    assert.ok(
+      human.out.join("\n").includes(`dig state: 1 commit since last dig on ${branch}`),
+      human.out.join("\n"),
+    );
+
+    // Mark at HEAD: zero commits since.
+    const head = git(repo, "rev-parse", "HEAD");
+    await writeDigState(whyRoot, {
+      version: DIG_STATE_VERSION,
+      branches: { [branch]: { lastProcessed: head } },
+    });
+    const fresh = await doctorJson(whyRoot, repo);
+    assert.equal(fresh.report.digState.commitsSince, 0);
+
+    // An unreadable state file reports invalid, loudly — doctor never throws.
+    await writeFile(join(whyRoot, DIG_STATE_FILENAME), "not json {", "utf8");
+    const invalid = await doctorJson(whyRoot, repo);
+    assert.equal(invalid.report.digState.status, "invalid");
+    const invalidHuman = capture();
+    await main(["doctor", "--bundle", whyRoot], repo, invalidHuman.io);
+    assert.ok(invalidHuman.out.join("\n").includes("dig state: invalid"), invalidHuman.out.join("\n"));
+
+    // A mark the repository cannot resolve is invalid too, never a guess.
+    await writeDigState(whyRoot, {
+      version: DIG_STATE_VERSION,
+      branches: { [branch]: { lastProcessed: "0123456789abcdef0123456789abcdef01234567" } },
+    });
+    const orphan = await doctorJson(whyRoot, repo);
+    assert.equal(orphan.report.digState.status, "invalid");
+    assert.ok(orphan.report.digState.detail.includes("does not resolve"), orphan.report.digState.detail);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
 test("harbor: yellow for its by-design expired constraint and open question, exit 0", async () => {
   const { code, report } = await doctorJson(HARBOR, process.cwd());
   assert.equal(code, 0, "yellow-only findings are healthy — exit 0");
@@ -219,6 +287,13 @@ test("a bundle outside any git repo skips the as_of check loudly, not silently",
     assert.equal(report.head, null);
     assert.equal(report.sections.staleAsOf.count, 0);
     assert.equal(typeof report.sections.staleAsOf.skipped, "string");
+    assert.deepEqual(report.digState, { status: "none" });
+
+    // With a state file but no repo, freshness is unknowable — said out loud.
+    await writeDigState(root, { version: DIG_STATE_VERSION, branches: { main: { lastProcessed: "abc" } } });
+    const rerun = await doctorJson(root, process.cwd());
+    assert.equal(rerun.report.digState.status, "unavailable");
+    assert.equal(typeof rerun.report.digState.detail, "string");
 
     const { io, out } = capture();
     await main(["doctor", "--bundle", root], process.cwd(), io);

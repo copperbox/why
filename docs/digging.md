@@ -102,10 +102,30 @@ Priority order within a cold start (usefulness per token): **tells first**,
 then the most-blamed hot files, then breadth. A first dig that nails the 20
 weirdest places in the repo beats a shallow sweep of everything.
 
-Routine re-digs are meant to be incremental — a high-water mark under
-`.why/` so only new history is processed. That state file is a later Phase 3
-issue (`issues/304-dig-incremental.md`); until it lands, pass the last-dug
-range explicitly and keep note of where you stopped.
+## Incremental re-digs: the high-water mark
+
+Routine digs are incremental. `.why/.dig-state.json` records, per branch, the
+last commit a successful `why dig --episodes` run processed — plain,
+schema-versioned JSON:
+
+```json
+{ "version": 1, "branches": { "main": { "lastProcessed": "<full sha>" } } }
+```
+
+The next run's default range starts at that mark; `--from <rev>` starts
+anywhere, `--full` re-digs all history. The mark advances to HEAD **only
+after a successful episode emission**, atomically (write-temp-rename), so a
+killed or failed run never moves it. A mark the repository can no longer
+verify — orphaned by a history rewrite, or a state file this build cannot
+read — is an explicit error naming the ways out, never a silently wrong
+range.
+
+Deleting the state file means "re-dig everything", and that is safe, not
+just allowed: episode extraction is deterministic (same history in, same
+episodes out), and the dig skill's update-don't-duplicate rule plus the
+synthesis pass turn re-encounters into updates, not copies. `why doctor`
+reports freshness — how many commits the current branch has accumulated
+since the last dig.
 
 ## Dry run: the harbor story
 
