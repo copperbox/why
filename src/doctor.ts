@@ -9,6 +9,8 @@ import { dirname } from "node:path";
 import { AnchorError, GitView } from "./anchor.js";
 import { anchorSpan } from "./blame.js";
 import type { Anchor, WhyBundle } from "./bundle.js";
+import { DigStateError, readDigState, type DigState } from "./dig-state.js";
+import { git as runGit } from "./git.js";
 import { lintBundle, type Finding } from "./lint.js";
 
 /** Red exits 1 (the archive cannot be trusted); yellow is maintenance debt. */
@@ -58,11 +60,22 @@ export interface DoctorSection<Item> {
   skipped?: string;
 }
 
+/**
+ * Dig freshness (DESIGN.md §6): how far HEAD has moved past the high-water
+ * mark in `.dig-state.json`. Informational — it never counts as a finding.
+ */
+export type DigStateHealth =
+  | { status: "ok"; branch: string; lastProcessed: string; commitsSince: number }
+  | { status: "none"; branch?: string }
+  | { status: "invalid"; detail: string }
+  | { status: "unavailable"; detail: string };
+
 /** The `--json` shape. Keys and section order are a stable, tested surface. */
 export interface DoctorReport {
   root: string;
   /** Short HEAD sha the as_of checks ran against; null when there is no repo. */
   head: string | null;
+  digState: DigStateHealth;
   concepts: number;
   /** No red findings — the exit-0 condition. */
   healthy: boolean;
@@ -90,6 +103,45 @@ function anchorItem(concept: string, anchor: Anchor): AnchorItem {
   if (anchor.lines !== undefined) item.lines = anchor.lines;
   if (anchor.as_of !== undefined) item.as_of = anchor.as_of;
   return item;
+}
+
+/**
+ * A state file doctor cannot read reports `invalid` (with the read error) but
+ * never throws — the dashboard must still render. With no enclosing repo the
+ * freshness of an existing mark is unknowable and says so.
+ */
+async function digStateHealth(
+  bundleRoot: string,
+  git: GitView | undefined,
+  gitUnavailable: string | undefined,
+): Promise<DigStateHealth> {
+  let state: DigState | undefined;
+  try {
+    state = await readDigState(bundleRoot);
+  } catch (e) {
+    if (!(e instanceof DigStateError)) throw e;
+    return { status: "invalid", detail: e.message };
+  }
+  if (git === undefined) {
+    if (state === undefined) return { status: "none" };
+    return { status: "unavailable", detail: gitUnavailable! };
+  }
+  const branch = runGit(git.root, ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
+  const mark = state?.branches[branch];
+  if (mark === undefined) return { status: "none", branch };
+  const count = runGit(git.root, ["rev-list", "--count", `${mark.lastProcessed}..HEAD`]);
+  if (count.status !== 0) {
+    return {
+      status: "invalid",
+      detail: `last processed commit ${mark.lastProcessed} on branch ${branch} does not resolve in this repository`,
+    };
+  }
+  return {
+    status: "ok",
+    branch,
+    lastProcessed: mark.lastProcessed,
+    commitsSince: Number(count.stdout.trim()),
+  };
 }
 
 function section<Item>(
@@ -121,6 +173,8 @@ export async function buildDoctorReport(
     if (!(e instanceof AnchorError)) throw e;
     gitUnavailable = e.message;
   }
+
+  const digState = await digStateHealth(bundle.root, git, gitUnavailable);
 
   const lost: AnchorItem[] = [];
   const stale: StaleAsOfItem[] = [];
@@ -191,6 +245,7 @@ export async function buildDoctorReport(
   return {
     root: bundle.root,
     head: git?.headShort ?? null,
+    digState,
     concepts: concepts.length,
     healthy: red === 0,
     red,
@@ -220,12 +275,24 @@ function pushSection<Item>(
   for (const item of sec.items) out.push(`             ${detail(item)}`);
 }
 
+function digStateLine(d: DigStateHealth): string {
+  if (d.status === "ok") {
+    return `dig state: ${d.commitsSince} commit${d.commitsSince === 1 ? "" : "s"} since last dig on ${d.branch}`;
+  }
+  if (d.status === "none") {
+    return `dig state: none — ${d.branch === undefined ? "never dug" : `branch ${d.branch} has never been dug`}`;
+  }
+  if (d.status === "invalid") return `dig state: invalid — ${d.detail}`;
+  return `dig state: not checked — ${d.detail}`;
+}
+
 export function renderDoctorReport(report: DoctorReport): string[] {
   const lines: string[] = [];
   const head = report.head === null ? "" : `, HEAD ${report.head}`;
   lines.push(
     `why doctor: ${report.concepts} concept${report.concepts === 1 ? "" : "s"} at ${report.root}${head}`,
   );
+  lines.push(digStateLine(report.digState));
   lines.push("");
   const s = report.sections;
   pushSection(lines, s.lostAnchors, (i) =>

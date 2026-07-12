@@ -2,11 +2,11 @@
 // `why` CLI entry point. Subcommands land phase by phase — see PLAN.md.
 // DESIGN.md is the source of truth for what each subcommand must do.
 
-import { writeFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
-import { loadAnchorIndex } from "./anchors.js";
+import { CACHE_DIRNAME, ensureSelfIgnoringDir, loadAnchorIndex } from "./anchors.js";
 import {
   BlameTargetError,
   buildBlameReport,
@@ -23,6 +23,7 @@ import {
   type EpisodesReport,
 } from "./dig.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
+import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
 
@@ -66,7 +67,12 @@ export function usage(): string {
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
     "  --episodes          (dig) extract commit episodes + tells from git history",
-    "  --out <file>        (dig) write the JSON report to a file",
+    "  --from <rev>        (dig --episodes) dig from <rev> instead of the recorded high-water mark",
+    "  --full              (dig --episodes) re-dig all history, ignoring the high-water mark",
+    "  --evidence <file>   (dig) assemble evidence packs from an --episodes JSON file",
+    "  --evidence-dir <dir>  (dig) merge in local exported context (postmortems, chats)",
+    "  --max-chars <n>     (dig) total size budget per evidence pack",
+    "  --out <file|dir>    (dig) write the JSON report to a file (--episodes) or pack output dir (--evidence, default <bundle>/.cache/evidence)",
   ].join("\n");
 }
 
@@ -183,23 +189,44 @@ async function runAnchor({ values, positionals, bundle, io }: CommandContext): P
   }
 }
 
-/** `why dig --episodes` — deterministic episode extraction + tells (DESIGN.md §6 step 1). */
-async function runDig({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
-  if (values.episodes !== true) {
-    io.err(
-      "why dig: only --episodes is implemented so far (evidence packs are the next issue) — usage: why dig --episodes [--json] [--out <file>]",
-    );
+/** `why doctor` — bundle health report (DESIGN.md §4, §8). Read-only. */
+async function runDoctor({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why doctor: takes no positional arguments — usage: why doctor [--json]");
     return 2;
   }
-  if (positionals.length > 0) {
-    io.err("why dig: takes no positional arguments — usage: why dig --episodes [--json] [--out <file>]");
+  const report = await buildDoctorReport(bundle!);
+  if (values.json === true) {
+    io.out(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of renderDoctorReport(report)) io.out(line);
+  }
+  return report.healthy ? 0 : 1;
+}
+
+const DIG_USAGE =
+  "usage: why dig --episodes [--json] [--from <rev>|--full] [--out <file>] | " +
+  "--evidence <episodes.json> [--evidence-dir <dir>] [--max-chars <n>] [--out <dir>]";
+
+/**
+ * `why dig` — either `--episodes` (deterministic episode extraction + tells,
+ * DESIGN.md §6 step 1) or `--evidence <episodes.json>` (assemble one evidence
+ * pack per episode, DESIGN.md §6 step 2).
+ */
+async function runDigEpisodes({ values, bundle, cwd, io }: CommandContext): Promise<number> {
+  if (values.from !== undefined && values.full === true) {
+    io.err("why dig: pass --from <rev> or --full, not both");
     return 2;
   }
   try {
-    // Default range: high-water mark → HEAD; full history when no usable mark.
-    const mark = readHighWaterMark(bundle!.root);
-    if (mark !== null && "note" in mark) io.err(`why dig: ${mark.note}`);
-    const from = mark !== null && "sha" in mark ? mark.sha : undefined;
+    // Default range: high-water mark → HEAD; full history when no usable
+    // mark, when --full is given, or when --from overrides it.
+    let from: string | undefined = values.from as string | undefined;
+    if (from === undefined && values.full !== true) {
+      const mark = readHighWaterMark(bundle!.root);
+      if (mark !== null && "note" in mark) io.err(`why dig: ${mark.note}`);
+      from = mark !== null && "sha" in mark ? mark.sha : undefined;
+    }
     const repo = dirname(bundle!.root);
     let report: EpisodesReport;
     try {
@@ -231,19 +258,70 @@ async function runDig({ values, positionals, bundle, cwd, io }: CommandContext):
   }
 }
 
-/** `why doctor` — bundle health report (DESIGN.md §4, §8). Read-only. */
-async function runDoctor({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+async function runDig({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
   if (positionals.length > 0) {
-    io.err("why doctor: takes no positional arguments — usage: why doctor [--json]");
+    io.err(`why dig: takes no positional arguments — ${DIG_USAGE}`);
     return 2;
   }
-  const report = await buildDoctorReport(bundle!);
-  if (values.json === true) {
-    io.out(JSON.stringify(report, null, 2));
-  } else {
-    for (const line of renderDoctorReport(report)) io.out(line);
+  if (values.episodes !== true && (values.from !== undefined || values.full === true)) {
+    io.err("why dig: --from/--full set the --episodes range — pass --episodes too");
+    return 2;
   }
-  return report.healthy ? 0 : 1;
+  if (values.episodes === true) {
+    return runDigEpisodes({ values, positionals, bundle, cwd, io });
+  }
+  const episodesFile = values.evidence as string | undefined;
+  if (episodesFile === undefined) {
+    io.err(`why dig: pass a mode — ${DIG_USAGE}`);
+    return 2;
+  }
+  let maxChars: number | undefined;
+  if (values["max-chars"] !== undefined) {
+    maxChars = Number(values["max-chars"]);
+    if (!Number.isInteger(maxChars) || maxChars <= 0) {
+      io.err(`why dig: --max-chars must be a positive integer, got "${values["max-chars"]}"`);
+      return 2;
+    }
+  }
+
+  let raw: string;
+  try {
+    raw = await readFile(episodesFile, "utf8");
+  } catch {
+    io.err(`why dig: cannot read episodes file ${episodesFile}`);
+    return 1;
+  }
+  try {
+    const episodes = readEpisodes(raw, episodesFile);
+    const bundleRoot = bundle!.root;
+    const repo = dirname(bundleRoot);
+    const outOverride = values.out as string | undefined;
+    const outDir = outOverride ?? join(bundleRoot, CACHE_DIRNAME, "evidence");
+    // Packs are derived state; the default location self-ignores like the
+    // anchor-index cache. An explicit --out is the user's directory to manage.
+    if (outOverride === undefined) await ensureSelfIgnoringDir(join(bundleRoot, CACHE_DIRNAME));
+    await mkdir(outDir, { recursive: true });
+    for (const episode of episodes) {
+      const pack = await buildEvidencePack(episode, {
+        repo,
+        maxChars,
+        evidenceDir: values["evidence-dir"] as string | undefined,
+      });
+      const file = join(outDir, `${pack.episodeId.replace(/[^A-Za-z0-9._-]+/g, "-")}.md`);
+      await writeFile(file, pack.markdown, "utf8");
+      io.out(`wrote ${file} (${pack.markdown.length} chars)`);
+      for (const note of pack.unavailable) io.out(`  unavailable: ${note}`);
+      for (const note of pack.clipped) io.out(`  clipped: ${note}`);
+    }
+    io.out(`${episodes.length} evidence pack(s) in ${outDir}`);
+    return 0;
+  } catch (e) {
+    if (e instanceof EvidenceError) {
+      io.err(`why dig: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
 }
 
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
@@ -279,6 +357,11 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
       ...BUNDLE_OPTIONS,
       episodes: { type: "boolean" },
       json: { type: "boolean" },
+      from: { type: "string" },
+      full: { type: "boolean" },
+      evidence: { type: "string" },
+      "evidence-dir": { type: "string" },
+      "max-chars": { type: "string" },
       out: { type: "string" },
     },
     needsBundle: true,

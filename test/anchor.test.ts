@@ -73,7 +73,7 @@ why:
     - path: src/lock.rs
       symbol: acquire_shared
       lines: 3-6
-      as_of: ${asOf}
+      as_of: "${asOf}"
       state: live
 ---
 
@@ -102,7 +102,7 @@ why:
   anchors:
     - path: config/defaults.toml
       lines: 3-4
-      as_of: ${asOf}
+      as_of: "${asOf}"
       state: live
 ---
 
@@ -127,7 +127,7 @@ why:
     - path: src/retry.rs
       symbol: without_jitter
       lines: 7-9
-      as_of: ${asOf}
+      as_of: "${asOf}"
       state: live
 ---
 
