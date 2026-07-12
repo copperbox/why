@@ -1,6 +1,6 @@
 {
   "name": "@copperbox/why",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Decision archaeology for codebases — recover, anchor, and audit the why behind code.",
   "type": "module",
   "license": "MIT",
