@@ -32,7 +32,7 @@ export function parseBlameTarget(spec: string): BlameTarget {
   return { path: normalizePath(match[1]!), lines: { start, end } };
 }
 
-function normalizePath(path: string): string {
+export function normalizePath(path: string): string {
   return path.replace(/^\.\//, "");
 }
 

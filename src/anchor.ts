@@ -12,8 +12,8 @@ import { execFile } from "node:child_process";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { updateConcept } from "@copperbox/okf-mcp";
-import { parseLineRange, type LineRange } from "./blame.js";
-import type { Anchor, WhyBundle, WhyConcept } from "./bundle.js";
+import { normalizePath, parseLineRange, type LineRange } from "./blame.js";
+import { isPlainMap, type Anchor, type WhyBundle, type WhyConcept } from "./bundle.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -252,10 +252,6 @@ interface ResolvedSpan {
   lines?: LineRange;
 }
 
-function normalizePath(path: string): string {
-  return path.replace(/^\.\//, "");
-}
-
 /**
  * DESIGN.md §4 resolution order for one anchor. Returns undefined when
  * nothing resolves — the caller marks the anchor lost.
@@ -428,10 +424,6 @@ export async function resolveAnchors(
 }
 
 // --- Writes ----------------------------------------------------------------
-
-function isPlainMap(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** Anchor entry in DESIGN.md's key order; single lines stay bare numbers. */
 function anchorEntry(anchor: Anchor): Record<string, unknown> {
