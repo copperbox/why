@@ -30,7 +30,7 @@
 // check, the result is `lost: "content-rewritten"`. A wrong range cannot be
 // emitted by hunk-math bugs alone — it would have to survive this check too.
 
-import { spawnSync } from "node:child_process";
+import { git, gitOrThrow, showLines } from "./git.js";
 
 export interface LineRange {
   /** 1-based, inclusive. */
@@ -63,34 +63,6 @@ interface Hunk {
   oldStart: number;
   oldCount: number;
   newCount: number;
-}
-
-function git(repo: string, args: string[]): { status: number; stdout: string; stderr: string } {
-  const r = spawnSync("git", ["-C", repo, "-c", "core.quotePath=false", ...args], {
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
-  });
-  if (r.error) {
-    throw new Error(`failed to run git ${args[0]}: ${r.error.message}`);
-  }
-  return { status: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
-}
-
-function gitOrThrow(repo: string, args: string[]): string {
-  const r = git(repo, args);
-  if (r.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${r.stderr.trim()}`);
-  }
-  return r.stdout;
-}
-
-/** File content at rev as an array of lines, or null if the path is absent. */
-function showLines(repo: string, rev: string, path: string): string[] | null {
-  const r = git(repo, ["show", `${rev}:${path}`]);
-  if (r.status !== 0) return null;
-  const lines = r.stdout.split("\n");
-  if (lines[lines.length - 1] === "") lines.pop();
-  return lines;
 }
 
 interface FileChange {

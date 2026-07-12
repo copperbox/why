@@ -27,6 +27,8 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "@copperbox/okf-mcp": "^0.19.1"
+    "@copperbox/okf-mcp": "^0.19.1",
+    "tree-sitter-wasms": "0.1.13",
+    "web-tree-sitter": "0.24.7"
   }
 }
