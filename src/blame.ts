@@ -32,7 +32,7 @@ export function parseBlameTarget(spec: string): BlameTarget {
   return { path: normalizePath(match[1]!), lines: { start, end } };
 }
 
-function normalizePath(path: string): string {
+export function normalizePath(path: string): string {
   return path.replace(/^\.\//, "");
 }
 
@@ -92,7 +92,7 @@ export interface BlameReport {
   nearby: NearbyConcept[];
 }
 
-function parseLineRange(lines: string): LineRange | undefined {
+export function parseLineRange(lines: string): LineRange | undefined {
   const match = /^(\d+)\s*-\s*(\d+)$|^(\d+)$/.exec(lines.trim());
   if (!match) return undefined;
   const start = Number(match[1] ?? match[3]);
@@ -316,7 +316,8 @@ function renderBlock(block: BlameBlock): string[] {
   return lines;
 }
 
-function anchorSpan(anchor: Anchor): string {
+/** `path[:lines]` — also the span format `why anchor` and `why doctor` print. */
+export function anchorSpan(anchor: Pick<Anchor, "path" | "lines">): string {
   return anchor.lines === undefined ? anchor.path : `${anchor.path}:${anchor.lines}`;
 }
 
