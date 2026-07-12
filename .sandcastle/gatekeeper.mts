@@ -39,6 +39,8 @@
 //   3 - idle (nothing ready to gate, nothing to promote yet)
 //   4 - all phases complete: no queue, no PRs, no backlog
 //   5 - HALTED: one or more issues need a human chat (label: needs-chat)
+//   6 - LIMIT: the Claude session/usage limit is exhausted — the loop should
+//       sleep and retry; aborting mid-gate is safe (all state is on GitHub)
 
 import { execFile } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
@@ -63,6 +65,14 @@ const NEEDS_CHAT_LABEL = "needs-chat";
 const IDLE_EXIT = 3;
 const COMPLETE_EXIT = 4;
 const HALT_EXIT = 5;
+const LIMIT_EXIT = 6;
+
+// Signatures the claude CLI emits when the subscription window / rate limit
+// is exhausted. Checked only on FAILED agent runs, so agent prose about rate
+// limits can't false-positive.
+const LIMIT_SIGNATURE = /usage limit|rate.?limit|limit reached|quota exceeded|overloaded/i;
+
+class UsageLimitError extends Error {}
 
 // --- plumbing ---------------------------------------------------------------
 
@@ -170,10 +180,17 @@ async function runAgent(opts: {
   ];
   if (opts.permissionMode) args.push("--permission-mode", opts.permissionMode);
   const res = await run("claude", args, { cwd: opts.cwd, timeoutMs: 45 * 60 * 1000 });
+  const combined = `${res.stdout}\n${res.stderr}`;
   if (res.code !== 0) {
+    if (LIMIT_SIGNATURE.test(combined)) {
+      throw new UsageLimitError(clip(combined.trim(), 500));
+    }
     throw new Error(`${opts.label} agent failed (${res.code}): ${clip(res.stderr || res.stdout, 2000)}`);
   }
-  const parsed = JSON.parse(res.stdout) as { result?: string };
+  const parsed = JSON.parse(res.stdout) as { result?: string; is_error?: boolean };
+  if (parsed.is_error === true && LIMIT_SIGNATURE.test(parsed.result ?? "")) {
+    throw new UsageLimitError(clip(parsed.result ?? "", 500));
+  }
   if (typeof parsed.result !== "string") {
     throw new Error(`${opts.label} agent returned no result field`);
   }
@@ -466,10 +483,19 @@ async function promoteNextPhase(): Promise<Promotion> {
 
 loadEnv();
 
-const prs = (await openFeaturePRs()).filter((pr) => !pr.isDraft).sort((a, b) => a.number - b.number);
-if (prs.length > 0) {
-  await gateOne(prs[0]!);
-  process.exit(0);
+try {
+  const prs = (await openFeaturePRs()).filter((pr) => !pr.isDraft).sort((a, b) => a.number - b.number);
+  if (prs.length > 0) {
+    await gateOne(prs[0]!);
+    process.exit(0);
+  }
+} catch (e) {
+  if (e instanceof UsageLimitError) {
+    console.error(`usage limit exhausted mid-gate: ${e.message}`);
+    console.error("exiting LIMIT (6) — round state is durable in PR comments; the loop sleeps and retries.");
+    process.exit(LIMIT_EXIT);
+  }
+  throw e;
 }
 
 console.log("no ready feature PRs to gate");
