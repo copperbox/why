@@ -31,13 +31,11 @@ test("an unknown flag is a usage error, not a crash", async () => {
   assert.ok(err.join("\n").includes("--no-such-flag"), err.join("\n"));
 });
 
-test("blame --bundle examples/harbor reaches the blame handler", async () => {
+test("blame without a target is a usage error, not a crash", async () => {
   const { io, err } = capture();
   const code = await main(["blame", "--bundle", "examples/harbor"], process.cwd(), io);
   assert.equal(code, 2);
-  const text = err.join("\n");
-  assert.ok(text.includes("why blame: not implemented"), text);
-  assert.ok(text.includes("6 concepts"), `handler should see the loaded bundle: ${text}`);
+  assert.ok(err.join("\n").includes("why blame <path>[:line[-line]]"), err.join("\n"));
 });
 
 test("a bundle command without a discoverable bundle errors naming why init", async () => {
@@ -67,12 +65,13 @@ test("discovery finds a .why/ above a nested cwd", async () => {
   }
 });
 
-test("acceptance: npx tsx src/cli.ts blame --bundle examples/harbor", () => {
+test("acceptance: npx tsx src/cli.ts lint --bundle examples/harbor reaches the stub", () => {
   const result = spawnSync(
     process.execPath,
-    ["--import", "tsx", "src/cli.ts", "blame", "--bundle", "examples/harbor"],
+    ["--import", "tsx", "src/cli.ts", "lint", "--bundle", "examples/harbor"],
     { encoding: "utf8" },
   );
   assert.equal(result.status, 2, result.stderr);
-  assert.ok(result.stderr.includes("why blame: not implemented"), result.stderr);
+  assert.ok(result.stderr.includes("why lint: not implemented"), result.stderr);
+  assert.ok(result.stderr.includes("6 concepts"), `stub should see the loaded bundle: ${result.stderr}`);
 });

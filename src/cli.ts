@@ -4,6 +4,12 @@
 
 import { basename } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
+import {
+  BlameTargetError,
+  buildBlameReport,
+  parseBlameTarget,
+  renderBlameReport,
+} from "./blame.js";
 import { loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
@@ -43,6 +49,7 @@ export function usage(): string {
     "Options:",
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
+    "  --json              (blame) emit the resolved story as JSON",
   ].join("\n");
 }
 
@@ -100,6 +107,29 @@ async function runInit({ values, cwd, io }: CommandContext): Promise<number> {
   }
 }
 
+/** `why blame` — the story behind a file or line range (DESIGN.md §7, static). */
+function runBlame({ values, positionals, bundle, io }: CommandContext): number {
+  if (positionals.length !== 1) {
+    io.err("why blame: expected exactly one target — usage: why blame <path>[:line[-line]]");
+    return 2;
+  }
+  try {
+    const report = buildBlameReport(bundle!, parseBlameTarget(positionals[0]!));
+    if (values.json === true) {
+      io.out(JSON.stringify(report, null, 2));
+    } else {
+      for (const line of renderBlameReport(report)) io.out(line);
+    }
+    return 0;
+  } catch (e) {
+    if (e instanceof BlameTargetError) {
+      io.err(`why blame: ${e.message} — usage: why blame <path>[:line[-line]]`);
+      return 2;
+    }
+    throw e;
+  }
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
   init: {
@@ -108,7 +138,11 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     run: runInit,
   },
   lint: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("lint") },
-  blame: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("blame") },
+  blame: {
+    options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },
+    needsBundle: true,
+    run: runBlame,
+  },
   anchor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("anchor") },
   doctor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("doctor") },
   dig: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("dig") },
