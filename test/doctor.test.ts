@@ -63,7 +63,7 @@ async function seedClinic(): Promise<{ repo: string; whyRoot: string; c1: string
     "anchors:",
     "  - path: src/gone.rs",
     "    lines: 3-4",
-    `    as_of: ${c1}`,
+    `    as_of: "${c1}"`,
     "    state: lost",
   ], [WHY_SECTION]));
   await write(repo, ".why/decisions/stale-anchor.md", doc("decision", "Stale anchor", [
@@ -71,7 +71,7 @@ async function seedClinic(): Promise<{ repo: string; whyRoot: string; c1: string
     "anchors:",
     "  - path: src/app.ts",
     "    lines: 1",
-    `    as_of: ${c1}`,
+    `    as_of: "${c1}"`,
     "    state: live",
   ], [WHY_SECTION]));
   await write(repo, ".why/constraints/review-overdue.md", doc("constraint", "Review overdue", [
