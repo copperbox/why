@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": true,
+    // Emitting build: src must use .js specifiers for relative imports
+    // (nodenext); the .ts-extension allowance is only for tsx-run tests.
+    "allowImportingTsExtensions": false
+  },
+  "include": ["src/**/*.ts"]
+}

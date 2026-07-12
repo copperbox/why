@@ -1,0 +1,29 @@
+{
+  "name": "@copperbox/why",
+  "version": "0.0.1",
+  "description": "Decision archaeology for codebases — recover, anchor, and audit the why behind code.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "why": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "verify": "npm run typecheck && npm run test",
+    "build": "tsc -p tsconfig.build.json",
+    "sandcastle": "tsx .sandcastle/main.mts",
+    "sandcastle:loop": "scripts/sandcastle-loop.sh",
+    "sandcastle:gate": "tsx .sandcastle/gatekeeper.mts",
+    "sandcastle:auto": "scripts/autonomous-loop.sh"
+  },
+  "devDependencies": {
+    "@copperbox/sandcastle-workflow": "^0.4.2",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
