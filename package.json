@@ -13,6 +13,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
+    "test:torture": "tsx --test test/torture/torture.test.ts",
     "verify": "npm run typecheck && npm run test",
     "build": "tsc -p tsconfig.build.json",
     "sandcastle": "tsx .sandcastle/main.mts",
