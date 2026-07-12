@@ -259,14 +259,18 @@ async function readCache(
   }
 }
 
-async function writeCache(cacheDir: string, cachePath: string, cache: CacheFile): Promise<void> {
-  await mkdir(cacheDir, { recursive: true });
+/** Create `dir` as derived state: it ignores itself so no bundle commits it. */
+export async function ensureSelfIgnoringDir(dir: string): Promise<void> {
+  await mkdir(dir, { recursive: true });
   try {
-    // The cache is derived state: it ignores itself so no bundle commits it.
-    await writeFile(join(cacheDir, ".gitignore"), "*\n", { flag: "wx" });
+    await writeFile(join(dir, ".gitignore"), "*\n", { flag: "wx" });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
   }
+}
+
+async function writeCache(cacheDir: string, cachePath: string, cache: CacheFile): Promise<void> {
+  await ensureSelfIgnoringDir(cacheDir);
   await writeFile(cachePath, `${JSON.stringify(cache)}\n`, "utf8");
 }
 

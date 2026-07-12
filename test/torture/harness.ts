@@ -125,7 +125,7 @@ function conceptSource(seed: SeededAnchor, asOf: string): string {
   if (seed.symbol !== undefined) lines.push(`      symbol: ${seed.symbol}`);
   if (seed.lines !== undefined) lines.push(`      lines: ${seed.lines}`);
   lines.push(
-    `      as_of: ${asOf}`,
+    `      as_of: "${asOf}"`,
     "      state: live",
     "---",
     "",
