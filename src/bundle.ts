@@ -11,9 +11,9 @@ import {
 } from "@copperbox/okf-mcp";
 import type {
   BodySection,
-  BundleProblem,
   ConceptFrontmatter,
   ConceptLink,
+  LoadedBundle,
 } from "@copperbox/okf-mcp";
 
 export const CONCEPT_TYPES = ["decision", "constraint", "attempt", "incident", "question"] as const;
@@ -102,8 +102,8 @@ export interface WhyBundle {
   concepts: Map<string, WhyConcept>;
   /** `why:` schema problems, per concept. */
   diagnostics: Diagnostic[];
-  /** OKF-level problems reported by okf-mcp. */
-  problems: BundleProblem[];
+  /** The underlying okf-mcp bundle — OKF-level problems and validation live there. */
+  okf: LoadedBundle;
 }
 
 const WHY_KEYS = new Set(["status", "happened_on", "expired_on", "confidence", "anchors", "verify"]);
@@ -267,5 +267,5 @@ export async function loadBundle(root: string): Promise<WhyBundle> {
       })),
     });
   }
-  return { root: okf.root, concepts, diagnostics, problems: okf.problems };
+  return { root: okf.root, concepts, diagnostics, okf };
 }

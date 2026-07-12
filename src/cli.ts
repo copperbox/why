@@ -13,6 +13,7 @@ import {
 import { loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
+import { lintBundle, renderFindings } from "./lint.js";
 
 export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit"] as const;
 export type Command = (typeof COMMANDS)[number];
@@ -48,8 +49,9 @@ export function usage(): string {
     "",
     "Options:",
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
+    "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
-    "  --json              (blame) emit the resolved story as JSON",
+    "  --json              (blame, lint) emit the results as JSON",
   ].join("\n");
 }
 
@@ -80,6 +82,8 @@ interface CommandSpec {
   options: CommandOptions;
   /** Whether to discover and load a bundle before running the handler. */
   needsBundle: boolean;
+  /** The command takes the bundle root as its (only) positional too. */
+  positionalBundle?: boolean;
   run: CommandHandler;
 }
 
@@ -105,6 +109,17 @@ async function runInit({ values, cwd, io }: CommandContext): Promise<number> {
     }
     throw e;
   }
+}
+
+/** `why lint` — schema checks on top of OKF validation (DESIGN.md §3). */
+async function runLint({ values, bundle, io }: CommandContext): Promise<number> {
+  const findings = await lintBundle(bundle!);
+  if (values.json === true) {
+    io.out(JSON.stringify({ root: bundle!.root, findings }, null, 2));
+  } else {
+    for (const line of renderFindings(bundle!, findings)) io.out(line);
+  }
+  return findings.some((f) => f.severity === "error") ? 1 : 0;
 }
 
 /** `why blame` — the story behind a file or line range (DESIGN.md §7, static). */
@@ -137,7 +152,12 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     needsBundle: false,
     run: runInit,
   },
-  lint: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("lint") },
+  lint: {
+    options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },
+    needsBundle: true,
+    positionalBundle: true,
+    run: runLint,
+  },
   blame: {
     options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },
     needsBundle: true,
@@ -182,8 +202,20 @@ export async function main(
 
   const ctx: CommandContext = { values, positionals, cwd, io };
   if (spec.needsBundle) {
+    let override = values.bundle as string | undefined;
+    if (spec.positionalBundle === true && positionals.length > 0) {
+      if (positionals.length > 1) {
+        io.err(`why ${command}: expected at most one bundle path`);
+        return 2;
+      }
+      if (override !== undefined) {
+        io.err(`why ${command}: pass the bundle as a positional path or with --bundle, not both`);
+        return 2;
+      }
+      override = positionals[0];
+    }
     try {
-      const root = resolveBundleRoot(cwd, values.bundle as string | undefined);
+      const root = resolveBundleRoot(cwd, override);
       ctx.bundle = await loadBundle(root);
     } catch (e) {
       if (e instanceof BundleNotFoundError) {

@@ -52,21 +52,21 @@ test("discovery finds a .why/ above a nested cwd", async () => {
   await mkdir(join(root, "src/deep"), { recursive: true });
   try {
     const { io, err } = capture();
-    const code = await main(["lint"], join(root, "src/deep"), io);
+    const code = await main(["doctor"], join(root, "src/deep"), io);
     assert.equal(code, 2);
-    assert.ok(err.join("\n").includes("why lint: not implemented"), err.join("\n"));
+    assert.ok(err.join("\n").includes("why doctor: not implemented"), err.join("\n"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("acceptance: npx tsx src/cli.ts lint --bundle examples/harbor reaches the stub", () => {
+test("acceptance: npx tsx src/cli.ts lint examples/harbor is clean", () => {
   const result = spawnSync(
     process.execPath,
-    ["--import", "tsx", "src/cli.ts", "lint", "--bundle", "examples/harbor"],
+    ["--import", "tsx", "src/cli.ts", "lint", "examples/harbor"],
     { encoding: "utf8" },
   );
-  assert.equal(result.status, 2, result.stderr);
-  assert.ok(result.stderr.includes("why lint: not implemented"), result.stderr);
-  assert.ok(result.stderr.includes("6 concepts"), `stub should see the loaded bundle: ${result.stderr}`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout.includes("6 concepts"), result.stdout);
+  assert.ok(result.stdout.includes("no findings"), result.stdout);
 });
