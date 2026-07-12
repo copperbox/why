@@ -2,7 +2,8 @@
 // `why` CLI entry point. Subcommands land phase by phase — see PLAN.md.
 // DESIGN.md is the source of truth for what each subcommand must do.
 
-import { basename } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { basename, dirname, resolve } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
 import { loadAnchorIndex } from "./anchors.js";
@@ -14,6 +15,7 @@ import {
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
+import { DigError, extractEpisodes, readHighWaterMark, renderEpisodesReport } from "./dig.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
@@ -54,9 +56,11 @@ export function usage(): string {
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
     "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
-    "  --json              (blame, lint, doctor) emit the results as JSON",
+    "  --json              (blame, lint, doctor, dig) emit the results as JSON",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
+    "  --episodes          (dig) extract commit episodes + tells from git history",
+    "  --out <file>        (dig) write the JSON report to a file",
   ].join("\n");
 }
 
@@ -173,6 +177,54 @@ async function runAnchor({ values, positionals, bundle, io }: CommandContext): P
   }
 }
 
+/** `why dig --episodes` — deterministic episode extraction + tells (DESIGN.md §6 step 1). */
+async function runDig({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
+  if (values.episodes !== true) {
+    io.err(
+      "why dig: only --episodes is implemented so far (evidence packs are the next issue) — usage: why dig --episodes [--json] [--out <file>]",
+    );
+    return 2;
+  }
+  if (positionals.length > 0) {
+    io.err("why dig: takes no positional arguments — usage: why dig --episodes [--json] [--out <file>]");
+    return 2;
+  }
+  try {
+    // Default range: high-water mark → HEAD; full history when no usable mark.
+    const mark = readHighWaterMark(bundle!.root);
+    if (mark !== null && "note" in mark) io.err(`why dig: ${mark.note}`);
+    const from = mark !== null && "sha" in mark ? mark.sha : undefined;
+    const repo = dirname(bundle!.root);
+    let report;
+    try {
+      report = extractEpisodes(repo, from === undefined ? {} : { from });
+    } catch (e) {
+      // A mark the repo no longer knows (rebase, gc) must not brick digging:
+      // re-digging everything is documented as safe, so fall back loudly.
+      if (from === undefined || !(e instanceof DigError) || !/range start/.test(e.message)) throw e;
+      io.err(`why dig: high-water mark unusable (${e.message}) — running full history`);
+      report = extractEpisodes(repo);
+    }
+    const json = JSON.stringify(report, null, 2);
+    const out = values.out === undefined ? undefined : resolve(cwd, values.out as string);
+    if (out !== undefined) await writeFile(out, json + "\n", "utf8");
+    if (values.json === true) {
+      io.out(json);
+    } else if (out !== undefined) {
+      io.out(`wrote ${report.episodes.length} episodes to ${out}`);
+    } else {
+      for (const line of renderEpisodesReport(report)) io.out(line);
+    }
+    return 0;
+  } catch (e) {
+    if (e instanceof DigError) {
+      io.err(`why dig: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 /** `why doctor` — bundle health report (DESIGN.md §4, §8). Read-only. */
 async function runDoctor({ values, positionals, bundle, io }: CommandContext): Promise<number> {
   if (positionals.length > 0) {
@@ -216,7 +268,16 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     needsBundle: true,
     run: runDoctor,
   },
-  dig: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("dig") },
+  dig: {
+    options: {
+      ...BUNDLE_OPTIONS,
+      episodes: { type: "boolean" },
+      json: { type: "boolean" },
+      out: { type: "string" },
+    },
+    needsBundle: true,
+    run: runDig,
+  },
   audit: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("audit") },
 };
 
