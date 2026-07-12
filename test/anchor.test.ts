@@ -6,26 +6,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { findSymbolSpan } from "../src/anchor.ts";
 import { loadBundle } from "../src/bundle.ts";
 import { main } from "../src/cli.ts";
 import { scaffoldBundle } from "../src/init.ts";
-import { capture } from "./helpers.ts";
-
-function git(repo: string, ...args: string[]): string {
-  const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
-  assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
-  return result.stdout.trim();
-}
-
-async function write(repo: string, rel: string, content: string): Promise<void> {
-  await mkdir(dirname(join(repo, rel)), { recursive: true });
-  await writeFile(join(repo, rel), content, "utf8");
-}
+import { capture, git, makeRepo, write } from "./helpers.ts";
 
 const LOCK_RS = `// locking module
 
@@ -164,10 +151,7 @@ interface Scenario {
 
 /** Seed code + bundle at c1, then refactor (rename, shift, delete) into c2. */
 async function seedScenario(): Promise<Scenario> {
-  const repo = await mkdtemp(join(tmpdir(), "why-anchor-"));
-  git(repo, "init", "-q");
-  git(repo, "config", "user.email", "test@example.com");
-  git(repo, "config", "user.name", "why tests");
+  const repo = await makeRepo("why-anchor-");
   await write(repo, "src/lock.rs", LOCK_RS);
   await write(repo, "config/defaults.toml", DEFAULTS_TOML);
   await write(repo, "src/retry.rs", RETRY_RS);

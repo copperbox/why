@@ -25,11 +25,13 @@ export class AnchorError extends Error {}
 /**
  * A read-only view of the repository at HEAD, with per-run caches. Anchor
  * paths are repo-root-relative, so everything resolves from the toplevel.
+ * Exported for `why doctor`, whose as_of-freshness check is the same view.
  */
-class GitView {
+export class GitView {
   private readonly headContent = new Map<string, string | undefined>();
   private readonly renameMaps = new Map<string, Map<string, string> | undefined>();
   private readonly commitShas = new Map<string, string | undefined>();
+  private readonly ancestry = new Map<string, boolean>();
 
   private constructor(
     readonly root: string,
@@ -82,6 +84,21 @@ class GitView {
       this.commitShas.set(rev, sha);
     }
     return this.commitShas.get(rev);
+  }
+
+  /** Whether `sha` is an ancestor of (or equal to) HEAD. */
+  async isAncestor(sha: string): Promise<boolean> {
+    if (!this.ancestry.has(sha)) {
+      let related: boolean;
+      try {
+        await run(this.root, ["merge-base", "--is-ancestor", sha, "HEAD"]);
+        related = true;
+      } catch {
+        related = false;
+      }
+      this.ancestry.set(sha, related);
+    }
+    return this.ancestry.get(sha)!;
   }
 
   /**

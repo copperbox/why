@@ -52,9 +52,9 @@ test("discovery finds a .why/ above a nested cwd", async () => {
   await mkdir(join(root, "src/deep"), { recursive: true });
   try {
     const { io, err } = capture();
-    const code = await main(["doctor"], join(root, "src/deep"), io);
+    const code = await main(["dig"], join(root, "src/deep"), io);
     assert.equal(code, 2);
-    assert.ok(err.join("\n").includes("why doctor: not implemented"), err.join("\n"));
+    assert.ok(err.join("\n").includes("why dig: not implemented"), err.join("\n"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

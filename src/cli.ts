@@ -13,6 +13,7 @@ import {
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
+import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
 
@@ -52,7 +53,7 @@ export function usage(): string {
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
     "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
-    "  --json              (blame, lint) emit the results as JSON",
+    "  --json              (blame, lint, doctor) emit the results as JSON",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
   ].join("\n");
@@ -169,6 +170,21 @@ async function runAnchor({ values, positionals, bundle, io }: CommandContext): P
   }
 }
 
+/** `why doctor` — bundle health report (DESIGN.md §4, §8). Read-only. */
+async function runDoctor({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why doctor: takes no positional arguments — usage: why doctor [--json]");
+    return 2;
+  }
+  const report = await buildDoctorReport(bundle!);
+  if (values.json === true) {
+    io.out(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of renderDoctorReport(report)) io.out(line);
+  }
+  return report.healthy ? 0 : 1;
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
   init: {
@@ -192,7 +208,11 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     needsBundle: true,
     run: runAnchor,
   },
-  doctor: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("doctor") },
+  doctor: {
+    options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },
+    needsBundle: true,
+    run: runDoctor,
+  },
   dig: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("dig") },
   audit: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("audit") },
 };
