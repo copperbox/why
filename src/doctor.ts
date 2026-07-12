@@ -7,6 +7,7 @@
 
 import { dirname } from "node:path";
 import { AnchorError, GitView } from "./anchor.js";
+import { anchorSpan } from "./blame.js";
 import type { Anchor, WhyBundle } from "./bundle.js";
 import { lintBundle, type Finding } from "./lint.js";
 
@@ -132,8 +133,10 @@ export async function buildDoctorReport(
       if (anchor.as_of === undefined || git === undefined) continue;
       const sha = await git.commitSha(anchor.as_of);
       if (sha === git.headFull) continue;
-      const reason: StaleReason =
-        sha === undefined ? "unresolved" : (await git.isAncestor(sha)) ? "behind-head" : "not-ancestor";
+      let reason: StaleReason;
+      if (sha === undefined) reason = "unresolved";
+      else if (await git.isAncestor(sha)) reason = "behind-head";
+      else reason = "not-ancestor";
       stale.push({ ...anchorItem(concept.id, anchor), as_of: anchor.as_of, reason });
     }
   }
@@ -204,10 +207,6 @@ const STALE_NOTES: Record<StaleReason, string> = {
   unresolved: "does not resolve in this repository",
 };
 
-function span(item: AnchorItem): string {
-  return item.lines === undefined ? item.path : `${item.path}:${item.lines}`;
-}
-
 const TITLE_WIDTH = 31; // the longest section title
 
 function pushSection<Item>(
@@ -230,9 +229,9 @@ export function renderDoctorReport(report: DoctorReport): string[] {
   lines.push("");
   const s = report.sections;
   pushSection(lines, s.lostAnchors, (i) =>
-    `${i.concept}  ${span(i)} (last known${i.as_of === undefined ? "" : `, as_of ${i.as_of}`})`,
+    `${i.concept}  ${anchorSpan(i)} (last known${i.as_of === undefined ? "" : `, as_of ${i.as_of}`})`,
   );
-  pushSection(lines, s.staleAsOf, (i) => `${i.concept}  ${span(i)} — as_of ${i.as_of} ${STALE_NOTES[i.reason]}`);
+  pushSection(lines, s.staleAsOf, (i) => `${i.concept}  ${anchorSpan(i)} — as_of ${i.as_of} ${STALE_NOTES[i.reason]}`);
   pushSection(lines, s.reviewByPastDue, (i) => `${i.concept}  review_by ${i.review_by}`);
   pushSection(lines, s.unknownConstraints, (i) => i.concept);
   pushSection(lines, s.expiredConstraints, (i) =>

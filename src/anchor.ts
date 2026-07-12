@@ -12,7 +12,7 @@ import { execFile } from "node:child_process";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { updateConcept } from "@copperbox/okf-mcp";
-import { normalizePath, parseLineRange, type LineRange } from "./blame.js";
+import { anchorSpan, normalizePath, parseLineRange, type LineRange } from "./blame.js";
 import { isPlainMap, type Anchor, type WhyBundle, type WhyConcept } from "./bundle.js";
 
 const execFileAsync = promisify(execFile);
@@ -484,18 +484,14 @@ export async function writeAnchorUpdates(bundle: WhyBundle, report: AnchorReport
 
 // --- Rendering -------------------------------------------------------------
 
-function spanText(anchor: Anchor): string {
-  return anchor.lines === undefined ? anchor.path : `${anchor.path}:${anchor.lines}`;
-}
-
 function detailFor(result: AnchorResult): string {
   switch (result.outcome) {
     case "current":
-      return spanText(result.before);
+      return anchorSpan(result.before);
     case "lost":
-      return `${spanText(result.before)} (last known${result.before.as_of === undefined ? "" : `, as_of ${result.before.as_of}`})`;
+      return `${anchorSpan(result.before)} (last known${result.before.as_of === undefined ? "" : `, as_of ${result.before.as_of}`})`;
     default:
-      return `${spanText(result.before)} → ${spanText(result.after)}`;
+      return `${anchorSpan(result.before)} → ${anchorSpan(result.after)}`;
   }
 }
 
