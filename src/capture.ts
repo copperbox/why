@@ -15,7 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { serializeDocument, splitFrontmatter, writeConcept } from "@copperbox/okf-mcp";
 import type { ConceptFrontmatter } from "@copperbox/okf-mcp";
 import { parseLineRange, type LineRange } from "./anchors.js";
-import { CONCEPT_TYPES, isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
+import { CONCEPT_TYPES, isOneOf, isPlainMap, loadBundle, type WhyBundle } from "./bundle.js";
 import {
   asComments,
   buildEvidencePack,
@@ -308,10 +308,6 @@ function whyMap(opts: {
   return why;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
 function asString(v: unknown): string | undefined {
   return typeof v === "string" && v !== "" ? v : undefined;
 }
@@ -344,7 +340,7 @@ export async function capturePr(
   let data: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(r.stdout);
-    if (!isRecord(parsed)) throw new Error("not an object");
+    if (!isPlainMap(parsed)) throw new Error("not an object");
     data = parsed;
   } catch {
     throw new CaptureError(`gh pr view ${n} returned unparseable JSON`);
@@ -360,7 +356,7 @@ export async function capturePr(
   const merged = state === "MERGED";
   const type = merged ? "decision" : "attempt";
   const title = asString(data.title) ?? `PR #${n}`;
-  const author = isRecord(data.author) ? asString(data.author.login) ?? "unknown" : "unknown";
+  const author = isPlainMap(data.author) ? asString(data.author.login) ?? "unknown" : "unknown";
   const notes: string[] = [];
 
   const whenRaw = merged ? asString(data.mergedAt) : asString(data.closedAt);
@@ -373,7 +369,7 @@ export async function capturePr(
   // landed on the mainline, so anchoring it there would be silently wrong.
   let anchors: CapturedAnchor[] = [];
   let touched = ghFilePaths(data.files);
-  let mergeSha = merged && isRecord(data.mergeCommit) ? asString(data.mergeCommit.oid) : undefined;
+  const mergeSha = merged && isPlainMap(data.mergeCommit) ? asString(data.mergeCommit.oid) : undefined;
   let mergeShaLocal = false;
   if (merged) {
     if (mergeSha === undefined) {
@@ -426,7 +422,7 @@ export async function capturePr(
     candidateCount: candidates.length,
     anchors,
     notes,
-    ...(happenedOn !== undefined ? { happenedOn } : {}),
+    happenedOn,
   });
   const frontmatter: Record<string, unknown> = {
     type,
@@ -436,12 +432,12 @@ export async function capturePr(
   };
 
   const headRefOid = asString(data.headRefOid);
-  const commits =
-    merged && mergeSha !== undefined && mergeShaLocal
-      ? [{ sha: mergeSha }]
-      : headRefOid !== undefined
-        ? [{ sha: headRefOid }]
-        : [];
+  let commits: { sha: string }[] = [];
+  if (mergeSha !== undefined && mergeShaLocal) {
+    commits = [{ sha: mergeSha }];
+  } else if (headRefOid !== undefined) {
+    commits = [{ sha: headRefOid }];
+  }
   const episode: Episode = { id: `pr-${n}`, commits, files: touched, prs: [n], issues: [] };
 
   const slug = slugify(title);
@@ -463,7 +459,7 @@ export async function capturePr(
 function ghFilePaths(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const paths = value
-    .filter(isRecord)
+    .filter(isPlainMap)
     .map((f) => asString(f.path))
     .filter((p): p is string => p !== undefined);
   return [...new Set(paths)].sort();
@@ -490,7 +486,8 @@ export async function captureCommit(
   }
   const [date, subject, ...rest] = shown.stdout.split("\n");
   const messageBody = rest.join("\n").trim();
-  const title = subject?.trim() !== "" && subject !== undefined ? subject.trim() : `commit ${sha7}`;
+  const title = subject?.trim() || `commit ${sha7}`;
+  const happenedOn = asString(date?.trim());
   const notes: string[] = [];
 
   const patch = runner(
@@ -514,13 +511,12 @@ export async function captureCommit(
     notes.push("no git remote to build a commit link from — add a citation by hand before promoting");
   }
 
-  const happenedOn = date?.trim();
   const why = whyMap({
     status: "active",
     candidateCount: candidates.length,
     anchors: derived.anchors,
     notes,
-    ...(happenedOn !== undefined && happenedOn !== "" ? { happenedOn } : {}),
+    happenedOn,
   });
   const frontmatter: Record<string, unknown> = {
     type: "decision",
@@ -535,7 +531,7 @@ export async function captureCommit(
   const body = draftBody({
     title,
     kind: "decision",
-    provenance: `commit ${sha7}${happenedOn === undefined || happenedOn === "" ? "" : ` (${happenedOn})`}`,
+    provenance: `commit ${sha7}${happenedOn === undefined ? "" : ` (${happenedOn})`}`,
     candidates,
     citations,
     notes,
