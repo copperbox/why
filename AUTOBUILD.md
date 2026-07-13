@@ -126,7 +126,8 @@ npm run sandcastle:auto
 # pieces, when wanted
 npm run sandcastle        # one build cycle
 npm run sandcastle:gate   # one gate pass
-                          # (env: GATE_MODEL, GATE_MAX_ROUNDS, GATE_CHAT_THRESHOLD)
+                          # (env: GATE_MODEL, GATE_EFFORT [high], GATE_MAX_ROUNDS,
+                          #  GATE_CHAT_THRESHOLD)
 ```
 
 Everything durable is on GitHub; Ctrl-C is always safe.

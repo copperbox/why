@@ -59,6 +59,7 @@ const VERIFY_COMMAND = "npm run verify";
 const MAX_ROUNDS = Number(process.env.GATE_MAX_ROUNDS ?? "3");
 const CHAT_THRESHOLD = Number(process.env.GATE_CHAT_THRESHOLD ?? "2");
 const GATE_MODEL = process.env.GATE_MODEL ?? "claude-fable-5";
+const GATE_EFFORT = process.env.GATE_EFFORT ?? "high";
 const MARKER = "<!-- gatekeeper";
 const ESC_MARKER = "<!-- gatekeeper:escalation -->";
 const NEEDS_CHAT_LABEL = "needs-chat";
@@ -167,12 +168,14 @@ async function runAgent(opts: {
   permissionMode?: string;
   label: string;
 }): Promise<string> {
-  console.log(`  · agent: ${opts.label} (${GATE_MODEL})`);
+  console.log(`  · agent: ${opts.label} (${GATE_MODEL}, effort ${GATE_EFFORT})`);
   const args = [
     "-p",
     opts.prompt,
     "--model",
     GATE_MODEL,
+    "--effort",
+    GATE_EFFORT,
     "--output-format",
     "json",
     "--allowedTools",
