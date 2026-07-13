@@ -23,7 +23,7 @@ export default defineConfig({
 
   implementNotes: [
     "DESIGN.md at the repo root is the source of truth for the `why` schema and",
-    "architecture; PLAN.md maps phases to issues. Read the DESIGN.md sections an",
+    "architecture; issues/ carries the per-task specs. Read the DESIGN.md sections an",
     "issue cites before writing code. examples/harbor/ is the fixture bundle —",
     "tests should run against it rather than inventing new fixtures. Never let a",
     "code path emit a silently-wrong anchor, and never assert rationale above its",

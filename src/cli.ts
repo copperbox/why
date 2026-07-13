@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// `why` CLI entry point. Subcommands land phase by phase — see PLAN.md.
-// DESIGN.md is the source of truth for what each subcommand must do.
+// `why` CLI entry point. DESIGN.md is the source of truth for what each
+// subcommand must do.
 
 import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -123,7 +123,7 @@ async function runInit({ values, cwd, io }: CommandContext): Promise<number> {
     io.out("");
     io.out("Next steps:");
     io.out(`  - serve it to agents:   npx -y @copperbox/okf-mcp --bundle ${name}=.why --writable`);
-    io.out("  - recover the backstory: why dig  (coming later — see PLAN.md)");
+    io.out("  - recover the backstory: why dig  (see docs/digging.md)");
     return 0;
   } catch (e) {
     if (e instanceof InitError) {

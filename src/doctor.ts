@@ -25,11 +25,13 @@ export interface AnchorItem {
 }
 
 /**
- * Why a live anchor's as_of is not current: an ancestor behind HEAD, a commit
- * unrelated to HEAD, or a rev this repository cannot resolve at all. All
- * three mean the claim was not made against HEAD.
+ * Why a live anchor's as_of is a real concern: it names a commit unrelated to
+ * HEAD (history diverged or was rebased away), or one this repository cannot
+ * resolve at all. A clean ancestor behind HEAD is stable provenance — the
+ * `why anchor` claim (DESIGN.md §2/§4: "the commit at which path+lines were
+ * valid") has simply survived unchanged since then — so it is not flagged.
  */
-export type StaleReason = "behind-head" | "not-ancestor" | "unresolved";
+export type StaleReason = "not-ancestor" | "unresolved";
 
 export interface StaleAsOfItem extends AnchorItem {
   as_of: string;
@@ -189,7 +191,7 @@ export async function buildDoctorReport(
       if (sha === git.headFull) continue;
       let reason: StaleReason;
       if (sha === undefined) reason = "unresolved";
-      else if (await git.isAncestor(sha)) reason = "behind-head";
+      else if (await git.isAncestor(sha)) continue; // clean ancestor of HEAD — stable provenance, not drift
       else reason = "not-ancestor";
       stale.push({ ...anchorItem(concept.id, anchor), as_of: anchor.as_of, reason });
     }
@@ -257,7 +259,6 @@ export async function buildDoctorReport(
 // --- Rendering -------------------------------------------------------------
 
 const STALE_NOTES: Record<StaleReason, string> = {
-  "behind-head": "is behind HEAD — run `why anchor`",
   "not-ancestor": "is not an ancestor of HEAD",
   unresolved: "does not resolve in this repository",
 };

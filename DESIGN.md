@@ -1,6 +1,6 @@
 # DESIGN — the `why` schema and architecture
 
-This is the source of truth for the knowledge schema and the three tools built on it. When implementation and this document disagree, one of them is a bug; fix whichever is wrong and record the decision in [PLAN.md](PLAN.md#decision-log).
+This is the source of truth for the knowledge schema and the three tools built on it. When implementation and this document disagree, one of them is a bug; fix whichever is wrong and record the decision as a `decision` concept in [.why/](.why/index.md).
 
 `why` is a schema and toolset **on top of** OKF v0.1 — every bundle is a valid OKF bundle first, and everything `why`-specific lives in (a) the `why:` frontmatter extension map, (b) link-section conventions, and (c) external tooling. A plain okf-mcp server can serve a `why` bundle with zero changes; `why`'s own tools add the semantics.
 
@@ -182,7 +182,7 @@ Same data over MCP: agents mount the bundle via okf-mcp and get story-of-this-co
 
 ## Open problems
 
-Tracked honestly; each phase in [PLAN.md](PLAN.md) retires or narrows one.
+Tracked honestly; the build's phased issues in [issues/](issues/) each retired or narrowed one.
 
 1. **Anchor drift under heavy refactoring.** Symbol + blame-trace should survive renames and moves; wholesale rewrites (v1 → v2 of a subsystem) are genuinely new code — is `lost` + re-dig the right answer, or should decisions carry forward through a human-confirmed "successor anchor"? *Phase 2 decides with real data.*
 2. **Hallucination pressure at scale.** One agent per episode with citation requirements is the design; does it hold when episodes are thin (terse commit messages, no PRs)? May need an adversarial verify pass — a second agent trying to refute each ≥`inferred` claim. *Phase 3 measures on a real repo before adding cost.*

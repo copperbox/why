@@ -5,7 +5,7 @@ division of labor:
 
 | Role | Who | Where |
 |---|---|---|
-| Product/architecture | Claude (chat sessions with Dan) | README.md, DESIGN.md, PLAN.md |
+| Product/architecture | Claude (chat sessions with Dan) | README.md, DESIGN.md, HOWTO.md |
 | Issue authoring | Claude | [issues/](issues/) — filed by the bootstrap script |
 | Planning, implementation, internal review, PR assembly | Sandcastle agents (Docker-sandboxed) | `@copperbox/sandcastle-workflow` |
 | **Final review, remediation, merge, escalation** | **Gatekeeper agent** | [.sandcastle/gatekeeper.mts](.sandcastle/gatekeeper.mts) |
@@ -43,7 +43,7 @@ division of labor:
 ```
 
 Phase 1 issues are filed pre-queued; phases 2–4 sit as labeled backlog until
-everything before them has merged, so the dependency order in PLAN.md is
+everything before them has merged, so the dependency order across phases is
 enforced by the ratchet, not by hope.
 
 ## Design decisions (and their whys — this file eats its own dog food)
