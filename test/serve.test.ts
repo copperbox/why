@@ -226,6 +226,14 @@ test("the built app boots in jsdom: tree renders, gutter paints, click tells the
   assert.ok(gutter.classList.contains("why-conf-recorded"), gutter.className);
   assert.equal(gutter.textContent, "●");
 
+  // The bundled highlighter (ui/highlight.js) colors the Rust source — every
+  // `// line N` becomes a comment token span — without ever altering the code:
+  // each td.text still reads exactly as HEAD blamed it.
+  assert.ok(doc.querySelector("table.code td.text .tok-com"), "Rust comments are highlighted");
+  const blame = await (await fetch(new URL("/api/blame?path=src/lock.rs", running.url))).json();
+  const rendered = [...doc.querySelectorAll("table.code td.text")].map((c) => c.textContent);
+  assert.deepEqual(rendered, blame.lines.map((l: { text: string }) => l.text), "highlighting is verbatim");
+
   // Click line 47 → the story panel renders the loud warning first (matching
   // the VS Code hover/webview order), then the hit.
   (line47 as HTMLElement).click();

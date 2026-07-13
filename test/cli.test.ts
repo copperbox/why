@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { COMMANDS, main, usage } from "../src/cli.ts";
 import { capture } from "./helpers.ts";
 
@@ -69,4 +69,27 @@ test("acceptance: npx tsx src/cli.ts lint examples/harbor is clean", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.ok(result.stdout.includes("6 concepts"), result.stdout);
   assert.ok(result.stdout.includes("no findings"), result.stdout);
+});
+
+test("regression: main() runs when launched through a symlink", async () => {
+  // npm's local installs and every node_modules/.bin shim are symlinks, and
+  // that is exactly how the VS Code extension shells out to the CLI. The
+  // direct-run guard must resolve argv[1]'s symlinks (import.meta.url is
+  // already realpath-resolved); a naive string compare left main() silently
+  // un-run — empty stdout, exit 0 — and the extension rendered nothing.
+  const dir = await mkdtemp(join(tmpdir(), "why-cli-link-"));
+  try {
+    const link = join(dir, "why-link.ts");
+    await symlink(resolve("src/cli.ts"), link);
+    const result = spawnSync(process.execPath, ["--import", "tsx", link, "--help"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+      result.stdout.includes("why — decision archaeology"),
+      `guard skipped main(): ${JSON.stringify(result.stdout)}`,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

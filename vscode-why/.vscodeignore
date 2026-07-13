@@ -1,4 +1,5 @@
 .vscodeignore
+.vscode/**
 tsconfig.json
 tsconfig.build.json
 src/**

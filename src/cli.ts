@@ -2,8 +2,10 @@
 // `why` CLI entry point. Subcommands land phase by phase — see PLAN.md.
 // DESIGN.md is the source of truth for what each subcommand must do.
 
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
 import { CACHE_DIRNAME, ensureSelfIgnoringDir, loadAnchorIndex } from "./anchors.js";
@@ -634,9 +636,21 @@ export async function main(
   return spec.run(ctx);
 }
 
-const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
-if (isDirectRun) {
+// Are we the entry point, or imported (e.g. by tests)? `import.meta.url` is
+// realpath-resolved, but `process.argv[1]` keeps the invoked path verbatim —
+// so a symlinked launch (npm's local installs and every `node_modules/.bin`
+// shim are symlinks) would never match a naive string compare, and `main()`
+// would silently never run. Resolve argv[1]'s symlinks to the same realpath,
+// and build the URL with pathToFileURL so odd characters compare correctly.
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
+if (isDirectRun()) {
   process.exit(await main(process.argv.slice(2)));
 }
