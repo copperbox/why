@@ -15,6 +15,7 @@ import {
   renderBlameReport,
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
+import { CaptureError, captureCommit, capturePr, promoteDraft, type CaptureResult } from "./capture.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
 import { DigError, extractEpisodes, plural, renderEpisodesReport } from "./dig.js";
 import { DigStateError, withDigState, type DigRange, type DigRangeOverrides } from "./dig-state.js";
@@ -23,7 +24,7 @@ import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
 
-export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit"] as const;
+export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit", "capture"] as const;
 export type Command = (typeof COMMANDS)[number];
 
 /** Where a command's output goes; injectable so tests can capture it. */
@@ -54,6 +55,7 @@ export function usage(): string {
     "  doctor   report lost anchors and stale constraints",
     "  dig      reconstruct decisions from git/PR history",
     "  audit    re-verify constraints; flag expired ones",
+    "  capture  draft a concept from a merged PR while the why is fresh",
     "",
     "Options:",
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
@@ -71,6 +73,9 @@ export function usage(): string {
     "  --out <file|dir>    (dig) write the JSON report to a file (--episodes) or pack output dir (--evidence, default <bundle>/.cache/evidence)",
     "  --questions-out <file>  (audit) export method:ask constraints as an agent questionnaire",
     "  --answers <file>    (audit) apply a filled-in questionnaire; no-longer-true expires the constraint",
+    "  --pr <n>            (capture) draft from a merged/closed PR via gh into .why/.drafts/",
+    "  --commit <sha>      (capture) gh-free fallback — draft from a local commit",
+    "  --promote <draft>   (capture) lint-gate a draft and move it into its type directory",
   ].join("\n");
 }
 
@@ -358,6 +363,62 @@ async function runAudit({ values, positionals, bundle, cwd, io }: CommandContext
   }
 }
 
+const CAPTURE_USAGE = "usage: why capture --pr <n> | --commit <sha> | --promote <draft>";
+
+/**
+ * `why capture` — merge-time capture (DESIGN.md open problem #5): draft a
+ * concept from a PR (or a commit, gh-free) into `.why/.drafts/`, and promote
+ * drafts out editorially, gated on lint. Drafts are never served.
+ */
+async function runCapture({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err(`why capture: takes no positional arguments — ${CAPTURE_USAGE}`);
+    return 2;
+  }
+  const modes = (["pr", "commit", "promote"] as const).filter((mode) => values[mode] !== undefined);
+  if (modes.length !== 1) {
+    io.err(`why capture: pass exactly one mode — ${CAPTURE_USAGE}`);
+    return 2;
+  }
+  try {
+    if (values.pr !== undefined) {
+      const n = Number(values.pr);
+      if (!Number.isInteger(n) || n <= 0) {
+        io.err(`why capture: --pr must be a PR number, got "${values.pr}"`);
+        return 2;
+      }
+      return renderCapture(await capturePr(bundle!, n), io);
+    }
+    if (values.commit !== undefined) {
+      return renderCapture(await captureCommit(bundle!, values.commit as string), io);
+    }
+    const result = await promoteDraft(bundle!, values.promote as string, cwd);
+    if (!result.promoted) {
+      io.err(`why capture: promotion refused — ${result.path} fails lint, draft kept:`);
+      for (const f of result.findings) io.err(`  ${f.severity.padEnd(7)} ${f.rule}  ${f.message}`);
+      return 1;
+    }
+    io.out(`promoted → ${result.path}`);
+    for (const f of result.findings) io.out(`  ${f.severity.padEnd(7)} ${f.rule}  ${f.message}`);
+    return 0;
+  } catch (e) {
+    if (e instanceof CaptureError) {
+      io.err(`why capture: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
+function renderCapture(result: CaptureResult, io: CliIo): number {
+  io.out(`drafted ${result.type}: ${result.draftPath}`);
+  io.out(`  evidence pack: ${result.evidencePath}`);
+  io.out(`  ${plural(result.candidateCount, "rationale candidate")}, ${plural(result.anchorCount, "anchor")}`);
+  for (const note of result.notes) io.out(`  note: ${note}`);
+  io.out(`drafts are not served — edit, then: why capture --promote ${basename(result.draftPath)}`);
+  return 0;
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
   init: {
@@ -410,6 +471,16 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     },
     needsBundle: true,
     run: runAudit,
+  },
+  capture: {
+    options: {
+      ...BUNDLE_OPTIONS,
+      pr: { type: "string" },
+      commit: { type: "string" },
+      promote: { type: "string" },
+    },
+    needsBundle: true,
+    run: runCapture,
   },
 };
 

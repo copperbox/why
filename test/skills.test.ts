@@ -1,5 +1,5 @@
-// The dig skills are prompt-docs, but their acceptance criteria are
-// mechanical: the confidence ladder must be verbatim DESIGN.md §2, the
+// The dig and capture skills are prompt-docs, but their acceptance criteria
+// are mechanical: the confidence ladder must be verbatim DESIGN.md §2, the
 // question-over-speculative rule must appear unweakened, and every tool the
 // prose tells an agent to run must actually exist at this point in the plan.
 // These tests pin all three so the docs can't drift from the contract.
@@ -13,15 +13,28 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
-const SKILL_PATHS = ["skills/dig/SKILL.md", "skills/dig-synthesize/SKILL.md"];
-const DOC_PATHS = [...SKILL_PATHS, "docs/digging.md"];
+const SKILL_PATHS = [
+  "skills/dig/SKILL.md",
+  "skills/dig-synthesize/SKILL.md",
+  "skills/capture/SKILL.md",
+];
+const DOC_PATHS = [...SKILL_PATHS, "docs/digging.md", "docs/capture.md"];
 
-/** `why <sub>` may only name subcommands implemented by this point in PLAN.md
- * Phase 3 (audit is Phase 4; --episodes/--evidence are earlier Phase 3). */
-const IMPLEMENTED_SUBCOMMANDS = new Set(["init", "lint", "blame", "anchor", "doctor", "dig"]);
+/** `why <sub>` may only name subcommands implemented by this point in the
+ * plan (all of Phases 1–4 now: audit and capture are real). */
+const IMPLEMENTED_SUBCOMMANDS = new Set([
+  "init",
+  "lint",
+  "blame",
+  "anchor",
+  "doctor",
+  "dig",
+  "audit",
+  "capture",
+]);
 
-/** snake_case tokens in the docs that are schema fields or example symbols,
- * not okf-mcp tool names. */
+/** snake_case tokens in the docs that are schema fields, example symbols, or
+ * GitHub Actions vocabulary, not okf-mcp tool names. */
 const NON_TOOL_TOKENS = new Set([
   "happened_on",
   "expired_on",
@@ -30,6 +43,7 @@ const NON_TOOL_TOKENS = new Set([
   "okf_version",
   "retry_jitter",
   "acquire_shared",
+  "pull_request",
 ]);
 
 /** Everything an agent would treat as runnable: fenced blocks + inline code. */
