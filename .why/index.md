@@ -23,3 +23,8 @@ description: Decision archive for the why tool itself — the self-hosted bundle
 
 * [`why blame` warns on every expired constraint](/decisions/blame-warns-on-every-expired-constraint.md) - the §5 payoff must never be invisible
 * [`why doctor` reports expired constraints as their own yellow section](/decisions/doctor-expired-constraints-section.md) - and unresolvable as_of reads stale, never healthy
+
+## UI — serve & extension
+
+* [Syntax highlighting lives in the client renderer, not the data contract](/decisions/serve-syntax-highlighting.md) - hand-rolled, zero-CDN, and never alters the code it colors
+* [The CLI direct-run guard resolves argv[1]'s symlinks](/decisions/symlink-safe-direct-run-guard.md) - so symlinked launches (npm bins, the VS Code extension) still run `main()`
