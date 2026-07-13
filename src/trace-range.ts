@@ -6,8 +6,8 @@
 // commands only.
 //
 // Approach: `git log -L` cannot express this query (it interprets both the
-// range and the path at the *newest* revision — see NOTES.md for the observed
-// failure modes). Instead we walk a parent→child commit chain from as_of to
+// range and the path at the *newest* revision, not at as_of, so it mistraces
+// or drops the anchor). Instead we walk a parent→child commit chain from as_of to
 // HEAD (see commitChain) and apply each step's zero-context diff hunks to the
 // tracked range:
 //

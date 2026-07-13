@@ -8,10 +8,6 @@ why:
   status: active
   happened_on: 2026-07-11
   confidence: recorded
-  anchors:
-    - path: PLAN.md
-      as_of: 9f0dc16
-      state: live
 ---
 
 # Consumption before archaeology

@@ -105,8 +105,8 @@ test("why doctor reads the repo's own .why/ bundle as healthy", async () => {
   assert.equal(report.healthy, true, "doctor says .why/ is unhealthy");
 });
 
-/** Spot-assert two former PLAN.md Decision log entries by slug (issue 403). */
-test("PLAN.md decision entries became recorded decision concepts", async () => {
+/** Spot-assert two bootstrap Decision log entries survived as concepts (issue 403). */
+test("bootstrap decision-log entries are recorded decision concepts", async () => {
   const bundle = await loadBundle(join(root, ".why"));
   for (const slug of ["decisions/okf-as-substrate", "decisions/escalation-circuit-breaker"]) {
     const concept = bundle.concepts.get(slug);
@@ -115,10 +115,4 @@ test("PLAN.md decision entries became recorded decision concepts", async () => {
     assert.equal(concept.why.confidence, "recorded", `${slug}: Decision log entries are recorded rationale`);
     assert.ok(concept.links.length + concept.body.length > 0, `${slug}: empty concept`);
   }
-});
-
-test("PLAN.md's Decision log is retired in favor of the bundle", () => {
-  const plan = read("PLAN.md");
-  assert.ok(!/\*Confidence: recorded\.\*/.test(plan), "PLAN.md still carries inline decision entries");
-  assert.ok(plan.includes(".why/decisions"), "PLAN.md should point at .why/decisions/ for the decision log");
 });

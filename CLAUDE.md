@@ -23,8 +23,8 @@ runs only when Dan says go.
    is an implementation defect (tighten acceptance criteria) or a spec defect
    (rewrite scope), edit the issue, then re-arm:
    `gh issue edit <n> --remove-label needs-chat --add-label Sandcastle`.
-1. Read `PLAN.md` — find the current phase (first with unchecked tasks) and follow its **Session protocol** section. That file is the memory between sessions; keep it updated.
-2. `DESIGN.md` is the source of truth for the schema and architecture. If reality disagrees with it, fix DESIGN.md in the same session and log the change in PLAN.md's Decision log.
+1. The build is complete — all phases shipped. Remaining or newly-scoped work lives as issues in `issues/` (filed to GitHub, built by Sandcastle) and as open `question` concepts in [.why/](.why/index.md). The project's decision memory *is* the `.why/` bundle, not a plan file: consult it before changing load-bearing code, and record durable choices back into it. `HOWTO.md` is the operator's guide for running `why` on any repo.
+2. `DESIGN.md` is the source of truth for the schema and architecture. If reality disagrees with it, fix DESIGN.md in the same session and record the change as a `decision` concept in `.why/`.
 
 ## Ground rules
 
