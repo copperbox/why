@@ -18,10 +18,17 @@ const SKILL_PATHS = [
   "skills/dig-synthesize/SKILL.md",
   "skills/capture/SKILL.md",
 ];
-const DOC_PATHS = [...SKILL_PATHS, "docs/digging.md", "docs/capture.md", "docs/ci.md", "docs/ui-contract.md"];
+const DOC_PATHS = [
+  ...SKILL_PATHS,
+  "docs/digging.md",
+  "docs/capture.md",
+  "docs/ci.md",
+  "docs/ui-contract.md",
+  "docs/vscode.md",
+];
 
 /** `why <sub>` may only name subcommands implemented by this point in the
- * plan (Phases 1–4 plus the Phase 5 UI data contract's `export`). */
+ * plan (Phases 1–4 plus the Phase 5/6 UI surface: `export`, `serve`). */
 const IMPLEMENTED_SUBCOMMANDS = new Set([
   "init",
   "lint",
@@ -32,6 +39,7 @@ const IMPLEMENTED_SUBCOMMANDS = new Set([
   "audit",
   "capture",
   "export",
+  "serve",
 ]);
 
 /** snake_case tokens in the docs that are schema fields, example symbols, or
@@ -46,6 +54,7 @@ const NON_TOOL_TOKENS = new Set([
   "acquire_shared",
   "pull_request",
   "workflow_dispatch",
+  "node_modules",
 ]);
 
 /** Everything an agent would treat as runnable: fenced blocks + inline code. */

@@ -24,8 +24,10 @@ import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { buildGraph, buildUiIndex, EXPORT_TARGETS, ExportError } from "./export.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
+import { ServeError, startWhyServer } from "./serve.js";
+import { AssetError } from "./serve-assets.js";
 
-export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit", "capture", "export"] as const;
+export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit", "capture", "export", "serve"] as const;
 export type Command = (typeof COMMANDS)[number];
 
 /** Where a command's output goes; injectable so tests can capture it. */
@@ -58,6 +60,7 @@ export function usage(): string {
     "  audit    re-verify constraints; flag expired ones",
     "  capture  draft a concept from a merged PR while the why is fresh",
     "  export   emit versioned UI-contract JSON (docs/ui-contract.md)",
+    "  serve    browse blame gutter, stories, and graph in a local read-only UI",
     "",
     "Options:",
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
@@ -79,6 +82,7 @@ export function usage(): string {
     "  --commit <sha>      (capture) gh-free fallback — draft from a local commit",
     "  --promote <draft>   (capture) lint-gate a draft and move it into its type directory",
     "  --out <file>        (export) write the payload to a file instead of stdout",
+    "  --port <n>          (serve) port to bind on 127.0.0.1 (default: a random free port)",
   ].join("\n");
 }
 
@@ -453,6 +457,40 @@ async function runExport({ values, positionals, bundle, cwd, io }: CommandContex
   }
 }
 
+/**
+ * `why serve` — the standalone local UI (DESIGN.md §8, issue 502). Localhost
+ * only, read-only, self-contained assets; blocks until the server closes
+ * (Ctrl-C). Endpoints are thin wrappers over the same library calls the other
+ * subcommands make.
+ */
+async function runServe({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why serve: takes no positional arguments — usage: why serve [--port <n>]");
+    return 2;
+  }
+  let port = 0;
+  if (values.port !== undefined) {
+    port = Number(values.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      io.err(`why serve: --port must be a port number (1-65535), got "${values.port}"`);
+      return 2;
+    }
+  }
+  try {
+    const running = await startWhyServer(bundle!.root, { port });
+    io.out(`why serve: ${running.url}`);
+    io.out(`  bundle ${bundle!.root} — read-only, 127.0.0.1 only; Ctrl-C to stop`);
+    await new Promise<void>((resolve) => running.server.once("close", resolve));
+    return 0;
+  } catch (e) {
+    if (e instanceof ServeError || e instanceof AssetError) {
+      io.err(`why serve: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 function renderCapture(result: CaptureResult, io: CliIo): number {
   io.out(`drafted ${result.type}: ${result.draftPath}`);
   io.out(`  evidence pack: ${result.evidencePath}`);
@@ -529,6 +567,11 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     options: { ...BUNDLE_OPTIONS, out: { type: "string" } },
     needsBundle: true,
     run: runExport,
+  },
+  serve: {
+    options: { ...BUNDLE_OPTIONS, port: { type: "string" } },
+    needsBundle: true,
+    run: runServe,
   },
 };
 

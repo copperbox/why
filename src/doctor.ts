@@ -262,6 +262,85 @@ const STALE_NOTES: Record<StaleReason, string> = {
   unresolved: "does not resolve in this repository",
 };
 
+/** One display line per finding — shared by the CLI renderer and the serve
+ * summary (schemas/doctor.schema.json), so the two surfaces cannot drift. */
+const ITEM_TEXT = {
+  lostAnchors: (i: AnchorItem) =>
+    `${i.concept}  ${anchorSpan(i)} (last known${i.as_of === undefined ? "" : `, as_of ${i.as_of}`})`,
+  staleAsOf: (i: StaleAsOfItem) => `${i.concept}  ${anchorSpan(i)} — as_of ${i.as_of} ${STALE_NOTES[i.reason]}`,
+  reviewByPastDue: (i: ReviewByItem) => `${i.concept}  review_by ${i.review_by}`,
+  unknownConstraints: (i: ConstraintItem) => i.concept,
+  expiredConstraints: (i: ConstraintItem) =>
+    `${i.concept}  expired_on ${i.expired_on ?? "(unrecorded — see why lint W402)"}`,
+  openQuestions: (i: QuestionItem) => `${i.concept}  open since ${i.happened_on ?? "(undated)"}`,
+  lintErrors: (i: Finding) => `${i.file}  ${i.rule}  ${i.message}`,
+} as const;
+
+export type DoctorSectionKey = keyof typeof ITEM_TEXT;
+
+/** Major version of the serve summary payload — policy in docs/ui-contract.md. */
+export const DOCTOR_SUMMARY_SCHEMA_VERSION = 1;
+
+export interface DoctorSummarySection {
+  key: DoctorSectionKey;
+  title: string;
+  severity: DoctorSeverity;
+  count: number;
+  /** Pre-rendered display lines — the same text the CLI prints per finding. */
+  items: string[];
+  skipped?: string;
+}
+
+/** The `GET /api/doctor` payload (schemas/doctor.schema.json). */
+export interface DoctorSummary {
+  schemaVersion: typeof DOCTOR_SUMMARY_SCHEMA_VERSION;
+  healthy: boolean;
+  head: string | null;
+  concepts: number;
+  red: number;
+  yellow: number;
+  /** All seven sections, in the CLI's render order. */
+  sections: DoctorSummarySection[];
+}
+
+function summarizeSection<Key extends DoctorSectionKey>(
+  key: Key,
+  sec: DoctorReport["sections"][Key],
+): DoctorSummarySection {
+  const items = sec.items.map((item) => (ITEM_TEXT[key] as (i: typeof item) => string)(item));
+  const summary: DoctorSummarySection = {
+    key,
+    title: sec.title,
+    severity: sec.severity,
+    count: sec.count,
+    items,
+  };
+  if (sec.skipped !== undefined) summary.skipped = sec.skipped;
+  return summary;
+}
+
+/** Flatten a report into the UI-contract summary `why serve` emits. */
+export function buildDoctorSummary(report: DoctorReport): DoctorSummary {
+  const s = report.sections;
+  return {
+    schemaVersion: DOCTOR_SUMMARY_SCHEMA_VERSION,
+    healthy: report.healthy,
+    head: report.head,
+    concepts: report.concepts,
+    red: report.red,
+    yellow: report.yellow,
+    sections: [
+      summarizeSection("lostAnchors", s.lostAnchors),
+      summarizeSection("staleAsOf", s.staleAsOf),
+      summarizeSection("reviewByPastDue", s.reviewByPastDue),
+      summarizeSection("unknownConstraints", s.unknownConstraints),
+      summarizeSection("expiredConstraints", s.expiredConstraints),
+      summarizeSection("openQuestions", s.openQuestions),
+      summarizeSection("lintErrors", s.lintErrors),
+    ],
+  };
+}
+
 const TITLE_WIDTH = 31; // the longest section title
 
 function pushSection<Item>(
@@ -295,17 +374,13 @@ export function renderDoctorReport(report: DoctorReport): string[] {
   lines.push(digStateLine(report.digState));
   lines.push("");
   const s = report.sections;
-  pushSection(lines, s.lostAnchors, (i) =>
-    `${i.concept}  ${anchorSpan(i)} (last known${i.as_of === undefined ? "" : `, as_of ${i.as_of}`})`,
-  );
-  pushSection(lines, s.staleAsOf, (i) => `${i.concept}  ${anchorSpan(i)} — as_of ${i.as_of} ${STALE_NOTES[i.reason]}`);
-  pushSection(lines, s.reviewByPastDue, (i) => `${i.concept}  review_by ${i.review_by}`);
-  pushSection(lines, s.unknownConstraints, (i) => i.concept);
-  pushSection(lines, s.expiredConstraints, (i) =>
-    `${i.concept}  expired_on ${i.expired_on ?? "(unrecorded — see why lint W402)"}`,
-  );
-  pushSection(lines, s.openQuestions, (i) => `${i.concept}  open since ${i.happened_on ?? "(undated)"}`);
-  pushSection(lines, s.lintErrors, (i) => `${i.file}  ${i.rule}  ${i.message}`);
+  pushSection(lines, s.lostAnchors, ITEM_TEXT.lostAnchors);
+  pushSection(lines, s.staleAsOf, ITEM_TEXT.staleAsOf);
+  pushSection(lines, s.reviewByPastDue, ITEM_TEXT.reviewByPastDue);
+  pushSection(lines, s.unknownConstraints, ITEM_TEXT.unknownConstraints);
+  pushSection(lines, s.expiredConstraints, ITEM_TEXT.expiredConstraints);
+  pushSection(lines, s.openQuestions, ITEM_TEXT.openQuestions);
+  pushSection(lines, s.lintErrors, ITEM_TEXT.lintErrors);
   lines.push("");
   const total = report.red + report.yellow;
   if (total === 0) {

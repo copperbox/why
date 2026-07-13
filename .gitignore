@@ -1,4 +1,7 @@
 node_modules/
 dist/
 *.log
+*.vsix
+vscode-why/out/
+vscode-why/.vscode-test/
 .sandcastle/.env

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copperbox/why/schemas/gitblame.schema.json",
+  "title": "why gitblame (serve)",
+  "description": "Payload of `why serve`'s GET /api/blame?path=…: one entry per line of the file at HEAD, from `git blame --porcelain` — the git half of the blame gutter. Content is the file at HEAD (not the working tree), so line numbers agree with the coverage payload computed at the same HEAD. docs/ui-contract.md annotates this schema.",
+  "schemaVersion": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "path", "head", "lines"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "path": { "type": "string", "minLength": 1 },
+    "head": {
+      "description": "Full sha of the HEAD the blame ran at — compare to the coverage payload's head to detect drift.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "lines": {
+      "description": "One entry per file line, in file order (1-based implicitly by position).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/line" }
+    }
+  },
+  "$defs": {
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "author", "date", "summary", "text"],
+      "properties": {
+        "sha": {
+          "description": "Full sha of the commit that last touched this line.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+        },
+        "author": { "type": "string" },
+        "date": {
+          "description": "Author date, YYYY-MM-DD in the author's timezone.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "summary": {
+          "description": "First line of the commit message.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The line's content at HEAD, without its trailing newline.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

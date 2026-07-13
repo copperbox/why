@@ -1,19 +1,30 @@
 # The UI data contract
 
-Every `why` UI — the local web UI (issue 502) and the VS Code extension
-(issue 503) — is a *dumb renderer* over the three versioned JSON payloads
+Every `why` UI — the local web UI (`why serve`, issue 502) and the VS Code
+extension (issue 503) — is a *dumb renderer* over the versioned JSON payloads
 documented here. Anchor resolution, confidence semantics, and hedging stay in
 the engine; a presentation layer contains no logic that could drift from
 DESIGN.md. The schemas are JSON Schema (draft 2020-12) documents in
 [schemas/](../schemas/), and [test/ui-contract.test.ts](../test/ui-contract.test.ts)
-validates the engine's real outputs (and this document's examples) against
-them on every run.
+and [test/serve.test.ts](../test/serve.test.ts) validate the engine's real
+outputs (and this document's examples) against them on every run.
+
+The three core payloads carry the bundle's semantics:
 
 | Payload | Produced by | Schema |
 |---|---|---|
-| story | `why blame <target> --json` | [schemas/story.schema.json](../schemas/story.schema.json) |
-| coverage | `why export ui-index [--out <file>]` | [schemas/coverage.schema.json](../schemas/coverage.schema.json) |
-| graph | `why export graph [--out <file>]` | [schemas/graph.schema.json](../schemas/graph.schema.json) |
+| story | `why blame <target> --json`; `GET /api/story` | [schemas/story.schema.json](../schemas/story.schema.json) |
+| coverage | `why export ui-index [--out <file>]`; `GET /api/coverage` | [schemas/coverage.schema.json](../schemas/coverage.schema.json) |
+| graph | `why export graph [--out <file>]`; `GET /api/graph` | [schemas/graph.schema.json](../schemas/graph.schema.json) |
+
+Three more are served only by `why serve` — the repo-side data (git's half of
+the blame gutter) and the health summary its header renders:
+
+| Payload | Produced by | Schema |
+|---|---|---|
+| files | `GET /api/files` | [schemas/files.schema.json](../schemas/files.schema.json) |
+| gitblame | `GET /api/blame?path=…` | [schemas/gitblame.schema.json](../schemas/gitblame.schema.json) |
+| doctor summary | `GET /api/doctor` | [schemas/doctor.schema.json](../schemas/doctor.schema.json) |
 
 ## Versioning policy
 
@@ -271,6 +282,87 @@ Example ([examples/harbor](../examples/harbor/), abbreviated):
   "edges": [
     { "from": "constraints/acme-45s-timeout", "to": "decisions/47s-request-deadline", "relation": "ledTo" },
     { "from": "decisions/47s-request-deadline", "to": "constraints/acme-45s-timeout", "relation": "becauseOf" }
+  ]
+}
+```
+
+## Files — `GET /api/files` (`why serve`)
+
+Every tracked file at HEAD (`git ls-files`), in git's order, for the file-tree
+sidebar. Untracked files are invisible on purpose: coverage and blame are
+computed at HEAD, so a file git does not know about has no story to show.
+
+```json
+{
+  "schemaVersion": 1,
+  "files": ["config/defaults.toml", "src/dispatch/queue.rs", "src/lock.rs"]
+}
+```
+
+## Git blame — `GET /api/blame?path=…` (`why serve`)
+
+Git's half of the blame gutter: one entry per line of the file **at HEAD**
+(`git blame --porcelain`), carrying the last-touching commit, its author,
+author date, and summary, plus the line's content. Serving HEAD content rather
+than the working tree keeps line numbers agreeing with the coverage payload,
+which is computed at the same HEAD — the payload's `head` lets a consumer
+verify that. Uncommitted edits are simply not there yet, the same honesty
+`why export ui-index` applies.
+
+```json
+{
+  "schemaVersion": 1,
+  "path": "src/lock.rs",
+  "head": "8b7d3f0c2f4f4b0d9a1e6c5b4a3928170f6e5d4c",
+  "lines": [
+    {
+      "sha": "a3f9c2e10b7d3f0c2f4f4b0d9a1e6c5b4a392817",
+      "author": "Priya N",
+      "date": "2024-03-14",
+      "summary": "replace striped locks with command queue",
+      "text": "pub fn acquire(&self, shard: ShardId) -> Ticket {"
+    }
+  ]
+}
+```
+
+## Doctor summary — `GET /api/doctor` (`why serve`)
+
+The `why doctor` health report summarized for the UI header's chips and a
+plain list view: overall red/yellow counts plus all seven sections in the
+CLI's render order, each item pre-rendered to the same display line the CLI
+prints. Keeping the strings in the data means the renderer carries no health
+semantics that could drift from doctor's. A section whose check could not run
+carries `skipped` with the reason — never a silent zero.
+
+```json
+{
+  "schemaVersion": 1,
+  "healthy": true,
+  "head": "8b7d3f0",
+  "concepts": 6,
+  "red": 0,
+  "yellow": 2,
+  "sections": [
+    { "key": "lostAnchors", "title": "lost anchors", "severity": "red", "count": 0, "items": [] },
+    { "key": "staleAsOf", "title": "stale as_of", "severity": "yellow", "count": 0, "items": [] },
+    { "key": "reviewByPastDue", "title": "review-by past due", "severity": "yellow", "count": 0, "items": [] },
+    { "key": "unknownConstraints", "title": "constraints with status unknown", "severity": "yellow", "count": 0, "items": [] },
+    {
+      "key": "expiredConstraints",
+      "title": "expired constraints",
+      "severity": "yellow",
+      "count": 1,
+      "items": ["constraints/acme-45s-timeout  expired_on 2025-06-30"]
+    },
+    {
+      "key": "openQuestions",
+      "title": "open questions",
+      "severity": "yellow",
+      "count": 1,
+      "items": ["questions/why-retry-jitter-disabled  open since 2025-11-02"]
+    },
+    { "key": "lintErrors", "title": "lint errors", "severity": "red", "count": 0, "items": [] }
   ]
 }
 ```

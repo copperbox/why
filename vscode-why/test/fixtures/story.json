@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "target": { "path": "src/lock.rs", "lines": { "start": 47, "end": 47 } },
+  "span": "src/lock.rs:41-58 · acquire_shared",
+  "hits": [
+    {
+      "id": "decisions/queue-based-locking",
+      "title": "Queue-based locking",
+      "type": "decision",
+      "status": "active",
+      "happened_on": "2024-03-14",
+      "confidence": "recorded",
+      "description": "Serialize all shard mutations through a single ordered command queue instead of striped RwLocks.",
+      "hedged": false,
+      "renderedRationale": "Serialize all shard mutations through a single ordered command queue instead of striped RwLocks.",
+      "anchors": [
+        { "path": "src/lock.rs", "symbol": "acquire_shared", "lines": "41-58", "as_of": "a3f9c2e", "state": "live" }
+      ],
+      "edges": {
+        "becauseOf": [
+          { "title": "2024-03 lock stall", "id": "incidents/2024-03-lock-stall", "type": "incident", "status": "resolved" }
+        ],
+        "insteadOf": [
+          { "title": "Striped RwLock", "id": "attempts/striped-rwlock", "type": "attempt", "status": "failed" }
+        ],
+        "supersededBy": []
+      },
+      "citations": [
+        { "label": "PR #212: replace striped locks with command queue", "url": "https://github.com/acme/harbor/pull/212" }
+      ],
+      "evidence": ["PR #212"],
+      "downstream": []
+    }
+  ],
+  "warnings": [
+    {
+      "id": "constraints/acme-45s-timeout",
+      "title": "Acme 45s gateway timeout",
+      "type": "constraint",
+      "status": "expired",
+      "happened_on": "2024-01-08",
+      "expired_on": "2025-06-30",
+      "confidence": "recorded",
+      "description": "AcmeCorp's API gateway killed any request exceeding 45 seconds — contractual latency ceiling on job submission.",
+      "hedged": false,
+      "renderedRationale": "AcmeCorp's API gateway killed any request exceeding 45 seconds — contractual latency ceiling on job submission.",
+      "anchors": [],
+      "edges": { "becauseOf": [], "insteadOf": [], "supersededBy": [] },
+      "citations": [
+        { "label": "Issue #612: remove Acme-specific rate tier", "url": "https://github.com/acme/harbor/issues/612" }
+      ],
+      "evidence": ["Issue #612"],
+      "downstream": [
+        { "title": "47s request deadline", "id": "decisions/47s-request-deadline", "type": "decision", "status": "active" }
+      ]
+    }
+  ],
+  "nearby": []
+}
