@@ -28,4 +28,4 @@ description: Decision archive for the why tool itself — the self-hosted bundle
 
 * [UI ⇄ backend is a versioned JSON data contract](/decisions/ui-data-contract.md) - story/coverage/graph payloads; UIs are dumb renderers and the §2 hedging invariant is structural in the schema
 * [Syntax highlighting lives in the client renderer, not the data contract](/decisions/serve-syntax-highlighting.md) - hand-rolled, zero-CDN, and never alters the code it colors
-* [The CLI direct-run guard resolves argv[1]'s symlinks](/decisions/symlink-safe-direct-run-guard.md) - so symlinked launches (npm bins, the VS Code extension) still run `main()`
+* [The CLI direct-run guard resolves the entry path's symlinks](/decisions/symlink-safe-direct-run-guard.md) - so symlinked launches (npm bins, the VS Code extension) still run `main()`
