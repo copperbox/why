@@ -1,0 +1,72 @@
+{
+  "name": "vscode-why",
+  "displayName": "why — decision archaeology",
+  "description": "Inline why annotations, GitLens-style: gutter marks and hover cards from the repo's .why/ bundle, rendered from the why CLI's UI-contract payloads.",
+  "version": "0.1.0",
+  "publisher": "copperbox",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/copperbox/why.git",
+    "directory": "vscode-why"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:.why/**"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "why.showStory",
+        "category": "why",
+        "title": "Show Story"
+      },
+      {
+        "command": "why.refresh",
+        "category": "why",
+        "title": "Refresh"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "why.showStory",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "why",
+      "properties": {
+        "why.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the `why` CLI executable. Checked after the workspace's node_modules/.bin and PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "tsx --test test/*.test.ts",
+    "verify": "npm run typecheck && npm run test",
+    "build": "tsc -p tsconfig.build.json",
+    "test:integration": "npm run build && node out/test-integration/run.js",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

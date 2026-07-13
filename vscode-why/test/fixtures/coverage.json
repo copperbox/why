@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "head": "8b7d3f0c2f4f4b0d9a1e6c5b4a3928170f6e5d4c",
+  "files": [
+    {
+      "path": "config/defaults.toml",
+      "spans": [
+        {
+          "conceptId": "decisions/47s-request-deadline",
+          "type": "decision",
+          "glyph": "●",
+          "status": "active",
+          "confidence": "corroborated",
+          "lines": { "start": 22, "end": 24 }
+        },
+        {
+          "conceptId": "questions/why-retry-jitter-disabled",
+          "type": "question",
+          "glyph": "?",
+          "status": "open",
+          "lines": { "start": 31, "end": 31 }
+        }
+      ]
+    },
+    {
+      "path": "src/lock.rs",
+      "spans": [
+        {
+          "conceptId": "incidents/2024-03-lock-stall",
+          "type": "incident",
+          "glyph": "●",
+          "status": "resolved",
+          "confidence": "recorded"
+        },
+        {
+          "conceptId": "decisions/queue-based-locking",
+          "type": "decision",
+          "glyph": "●",
+          "status": "active",
+          "confidence": "recorded",
+          "lines": { "start": 41, "end": 58 }
+        }
+      ]
+    }
+  ]
+}

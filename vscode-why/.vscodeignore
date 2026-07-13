@@ -1,0 +1,10 @@
+.vscodeignore
+tsconfig.json
+tsconfig.build.json
+src/**
+test/**
+test-integration/**
+out/test-integration/**
+out/**/*.map
+node_modules/**
+*.vsix
