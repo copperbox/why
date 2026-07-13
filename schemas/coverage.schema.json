@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copperbox/why/schemas/coverage.schema.json",
+  "title": "why coverage (ui-index)",
+  "description": "Output of `why export ui-index`: the per-file coverage map — which concepts anchor which spans — computed from the anchor index at HEAD. docs/ui-contract.md annotates this schema.",
+  "schemaVersion": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "head", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "head": {
+      "description": "Full sha of the repo HEAD the index was computed at — consumers compare it to their checkout to detect staleness.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "files": {
+      "description": "Files carrying at least one live anchor claim, ordered by path.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/file" }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "spans"],
+      "properties": {
+        "path": { "type": "string" },
+        "spans": {
+          "description": "Whole-file claims first, then ranged spans ordered by start — non-overlapping where possible, but two concepts may honestly claim overlapping spans.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/span" }
+        }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conceptId", "type", "glyph"],
+      "properties": {
+        "conceptId": { "type": "string" },
+        "type": { "enum": ["decision", "constraint", "attempt", "incident", "question"] },
+        "status": { "type": "string" },
+        "confidence": { "enum": ["recorded", "corroborated", "inferred", "speculative"] },
+        "glyph": {
+          "description": "Status glyph, precomputed by the engine — same vocabulary `why blame` renders (docs/ui-contract.md).",
+          "enum": ["●", "⚠", "?"]
+        },
+        "lines": {
+          "description": "1-based inclusive line range; absent = a whole-file claim.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": { "type": "integer", "minimum": 1 },
+            "end": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

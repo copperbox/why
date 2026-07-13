@@ -7,6 +7,7 @@
 import { deriveTitle, extractCitations } from "@copperbox/okf-mcp";
 import {
   buildAnchorIndex,
+  indexedConcept,
   lookupAnchors,
   parseLineRange,
   type AnchorHit,
@@ -57,6 +58,19 @@ export interface BlameEdge {
   status?: string;
 }
 
+/** Typed edges out of a story hit, grouped by relation (docs/ui-contract.md). */
+export interface BlameEdges {
+  becauseOf: BlameEdge[];
+  insteadOf: BlameEdge[];
+  supersededBy: BlameEdge[];
+}
+
+/** One `# Citations` entry: display label plus the link target. */
+export interface BlameCitation {
+  label: string;
+  url: string;
+}
+
 /** One concept in the story, fully resolved for rendering or `--json`. */
 export interface BlameBlock {
   id: string;
@@ -66,13 +80,21 @@ export interface BlameBlock {
   happened_on?: string;
   expired_on?: string;
   confidence?: Confidence;
-  /** The one-line rationale as written; the renderer adds hedges on top. */
+  /** The one-line rationale as written; `renderedRationale` is the hedged form. */
   description: string;
+  /** True when confidence sits below `corroborated` (questions never hedge). */
+  hedged: boolean;
+  /**
+   * The rationale with its mandatory hedge prefix baked in (DESIGN.md §2 made
+   * structural): renderers display this verbatim and must not re-derive
+   * hedging — a renderer that ignores `confidence` still cannot show
+   * unhedged speculation. Empty when there is no rationale to show.
+   */
+  renderedRationale: string;
   /** Anchors of this concept that cover the target (empty on warning blocks). */
   anchors: Anchor[];
-  because_of: BlameEdge[];
-  instead_of: BlameEdge[];
-  superseded_by: BlameEdge[];
+  edges: BlameEdges;
+  citations: BlameCitation[];
   /** Short citation labels — the `evidence ▸` line. */
   evidence: string[];
   /** Expired constraints only: active decisions reachable via `# Led to`. */
@@ -87,12 +109,16 @@ export interface NearbyConcept {
   anchor: Anchor;
 }
 
+/** Major version of the story payload — see docs/ui-contract.md for the policy. */
+export const STORY_SCHEMA_VERSION = 1;
+
 export interface BlameReport {
+  schemaVersion: typeof STORY_SCHEMA_VERSION;
   target: BlameTarget;
   /** Narrowest covering anchor span — the output header. */
   span?: string;
   /** Concepts anchored on the target, newest first. */
-  matches: BlameBlock[];
+  hits: BlameBlock[];
   /** Expired constraints not already matched: never invisible (DESIGN.md §7). */
   warnings: BlameBlock[];
   /** When nothing matches: anchored concepts nearest the target's directory. */
@@ -118,11 +144,34 @@ function edgesIn(bundle: WhyBundle, concept: WhyConcept, section: string): Blame
     .map((link) => edgeFrom(bundle, link));
 }
 
-/** `PR #212: replace striped locks…` reads as `PR #212` on one evidence line. */
-function citationLabels(bundle: WhyBundle, concept: WhyConcept): string[] {
+function citationsOf(bundle: WhyBundle, concept: WhyConcept): BlameCitation[] {
   const { citations } = extractCitations(concept.body, concept.path, (id) => bundle.concepts.has(id));
-  const labels = citations.map((c) => c.text.split(":")[0]!.trim()).filter((label) => label !== "");
+  return citations.map((c) => ({ label: c.text, url: c.target }));
+}
+
+/** `PR #212: replace striped locks…` reads as `PR #212` on one evidence line. */
+function evidenceLabels(citations: BlameCitation[]): string[] {
+  const labels = citations.map((c) => c.label.split(":")[0]!.trim()).filter((label) => label !== "");
   return [...new Set(labels)];
+}
+
+/**
+ * Hedging is engine logic, precomputed into the payload: anything below
+ * `corroborated` hedges, and an unstated confidence hedges hardest — the data
+ * may never hedge less than the evidence supports. Questions carry no
+ * rationale to hedge.
+ */
+function hedgePrefix(type: string, confidence: Confidence | undefined): string {
+  if (type === "question") return "";
+  switch (confidence) {
+    case "recorded":
+    case "corroborated":
+      return "";
+    case "inferred":
+      return "likely — ";
+    default:
+      return "speculation, thin evidence — ";
+  }
 }
 
 function isExpiredConstraint(type: string, status: string | undefined): boolean {
@@ -130,16 +179,25 @@ function isExpiredConstraint(type: string, status: string | undefined): boolean 
 }
 
 function toBlock(bundle: WhyBundle, concept: WhyConcept, anchors: Anchor[]): BlameBlock {
+  const type = concept.frontmatter.type;
+  const description = oneLiner(concept);
+  const hedge = hedgePrefix(type, concept.why.confidence);
+  const citations = citationsOf(bundle, concept);
   const block: BlameBlock = {
     id: concept.id,
     title: deriveTitle(concept),
-    type: concept.frontmatter.type,
-    description: oneLiner(concept),
+    type,
+    description,
+    hedged: hedge !== "",
+    renderedRationale: description === "" ? "" : `${hedge}${description}`,
     anchors,
-    because_of: edgesIn(bundle, concept, "because of"),
-    instead_of: edgesIn(bundle, concept, "instead of"),
-    superseded_by: edgesIn(bundle, concept, "superseded by"),
-    evidence: citationLabels(bundle, concept),
+    edges: {
+      becauseOf: edgesIn(bundle, concept, "because of"),
+      insteadOf: edgesIn(bundle, concept, "instead of"),
+      supersededBy: edgesIn(bundle, concept, "superseded by"),
+    },
+    citations,
+    evidence: evidenceLabels(citations),
     downstream: [],
   };
   if (concept.why.status !== undefined) block.status = concept.why.status;
@@ -226,19 +284,14 @@ export function buildBlameReport(
     else hitsByConcept.set(hit.conceptId, [hit]);
   }
   const matched = [...hitsByConcept.entries()].map(([id, hits]) => {
-    const concept = bundle.concepts.get(id);
-    if (!concept) {
-      // The cache key ties an index to exact bundle contents; disagreeing
-      // here means the caller mixed an index with some other bundle.
-      throw new Error(`anchor index names unknown concept "${id}" — it was not built from this bundle`);
-    }
+    const concept = indexedConcept(bundle, id);
     hits.sort((a, b) => a.anchorIndex - b.anchorIndex); // anchors in written order
     return { concept, anchors: hits.map((hit) => hit.anchor) };
   });
   matched.sort((a, b) => newestFirst(a.concept, b.concept));
 
-  const matches = matched.map(({ concept, anchors }) => toBlock(bundle, concept, anchors));
-  const matchedIds = new Set(matches.map((block) => block.id));
+  const hits = matched.map(({ concept, anchors }) => toBlock(bundle, concept, anchors));
+  const matchedIds = new Set(hits.map((block) => block.id));
   const warnings = [...bundle.concepts.values()]
     .filter(
       (concept) =>
@@ -247,10 +300,10 @@ export function buildBlameReport(
     .sort(newestFirst)
     .map((concept) => toBlock(bundle, concept, []));
 
-  const report: BlameReport = { target, matches, warnings, nearby: [] };
+  const report: BlameReport = { schemaVersion: STORY_SCHEMA_VERSION, target, hits, warnings, nearby: [] };
   const span = spanOf(matched.flatMap((m) => m.anchors));
   if (span !== undefined) report.span = span;
-  if (matches.length === 0) report.nearby = nearestAnchored(bundle, target);
+  if (hits.length === 0) report.nearby = nearestAnchored(bundle, target);
   return report;
 }
 
@@ -258,28 +311,13 @@ export function buildBlameReport(
 
 const TITLE_COLUMN = 40;
 
-function glyphFor(type: string, status: string | undefined): string {
+/** Status glyph vocabulary — shared with `why export ui-index` (docs/ui-contract.md). */
+export type Glyph = "●" | "⚠" | "?";
+
+export function glyphFor(type: string, status: string | undefined): Glyph {
   if (type === "question") return "?";
   if (status === "expired" || status === "superseded") return "⚠";
   return "●";
-}
-
-/**
- * Hedging is mandatory rendering logic: anything below `corroborated` hedges,
- * and an unstated confidence hedges hardest — rendering may never hedge less
- * than the evidence supports. Questions carry no rationale to hedge.
- */
-function hedgeFor(block: BlameBlock): string {
-  if (block.type === "question") return "";
-  switch (block.confidence) {
-    case "recorded":
-    case "corroborated":
-      return "";
-    case "inferred":
-      return "likely — ";
-    default:
-      return "speculation, thin evidence — ";
-  }
 }
 
 function metaLine(block: BlameBlock): string {
@@ -307,11 +345,12 @@ function renderBlock(block: BlameBlock): string[] {
   const lines: string[] = [];
   const head = `${glyphFor(block.type, block.status)} ${block.title}`;
   lines.push(`  ${head.padEnd(TITLE_COLUMN)} ${metaLine(block)}`);
-  if (block.description !== "") lines.push(`    ${hedgeFor(block)}${block.description}`);
+  // The hedge is already baked into renderedRationale — display it verbatim.
+  if (block.renderedRationale !== "") lines.push(`    ${block.renderedRationale}`);
   const edgeLines: Array<[string, string]> = [];
-  for (const edge of block.because_of) edgeLines.push(["because of", edgeText(edge, false)]);
-  for (const edge of block.instead_of) edgeLines.push(["instead of", edgeText(edge, true)]);
-  for (const edge of block.superseded_by) edgeLines.push(["superseded by", edgeText(edge, false)]);
+  for (const edge of block.edges.becauseOf) edgeLines.push(["because of", edgeText(edge, false)]);
+  for (const edge of block.edges.insteadOf) edgeLines.push(["instead of", edgeText(edge, true)]);
+  for (const edge of block.edges.supersededBy) edgeLines.push(["superseded by", edgeText(edge, false)]);
   if (block.evidence.length > 0) edgeLines.push(["evidence", block.evidence.join(", ")]);
   const labelWidth = Math.max(10, ...edgeLines.map(([label]) => label.length));
   for (const [label, text] of edgeLines) lines.push(`    ${label.padEnd(labelWidth)} ▸ ${text}`);
@@ -328,9 +367,9 @@ export function anchorSpan(anchor: Pick<Anchor, "path" | "lines">): string {
 
 export function renderBlameReport(report: BlameReport): string[] {
   const lines: string[] = [];
-  if (report.matches.length > 0) {
+  if (report.hits.length > 0) {
     if (report.span !== undefined) lines.push(report.span);
-    for (const block of report.matches) lines.push("", ...renderBlock(block));
+    for (const block of report.hits) lines.push("", ...renderBlock(block));
   } else {
     lines.push(`No concepts anchor ${formatTarget(report.target)}.`);
     if (report.nearby.length > 0) {

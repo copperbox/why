@@ -160,17 +160,48 @@ test("a lost anchor never matches — a last-known location is not a live claim"
   }
 });
 
-test("--json emits the resolved structure", async () => {
+test("--json emits the versioned story contract (docs/ui-contract.md)", async () => {
   const { code, out } = await blame(["src/lock.rs:47", ...HARBOR, "--json"]);
   assert.equal(code, 0);
   const report = JSON.parse(out);
+  assert.equal(report.schemaVersion, 1);
   assert.deepEqual(report.target, { path: "src/lock.rs", lines: { start: 47, end: 47 } });
-  assert.equal(report.matches[0].id, "decisions/queue-based-locking");
-  assert.equal(report.matches[0].because_of.length, 2);
-  assert.equal(report.matches[0].instead_of[0].title, "Striped RwLock");
+  const hit = report.hits[0];
+  assert.equal(hit.id, "decisions/queue-based-locking");
+  assert.equal(hit.edges.becauseOf.length, 2);
+  assert.equal(hit.edges.insteadOf[0].title, "Striped RwLock");
+  assert.equal(hit.hedged, false, "recorded confidence must not hedge");
+  assert.equal(hit.renderedRationale, hit.description, "unhedged rationale is the description verbatim");
+  const pr = hit.citations.find((c: { label: string }) => c.label.startsWith("PR #212"));
+  assert.ok(pr, `citations must carry label + url:\n${JSON.stringify(hit.citations)}`);
+  assert.equal(pr.url, "https://github.com/acme/harbor/pull/212");
   const acme = report.warnings.find((w: { id: string }) => w.id === "constraints/acme-45s-timeout");
   assert.ok(acme, "expired constraint missing from warnings");
   assert.equal(acme.downstream[0].title, "47s request deadline");
+});
+
+test("--json precomputes hedging into the data: inferred hits carry hedged + the prefix", async () => {
+  const root = await makeBundle({
+    "decisions/hunch.md": concept({
+      type: "decision",
+      title: "Hunch",
+      description: "The cache is sized to fit one shard.",
+      confidence: "inferred",
+      anchor: "    - path: src/cache.ts\n      lines: 1-10",
+    }),
+  });
+  try {
+    const { out } = await blame(["src/cache.ts:5", "--bundle", root, "--json"]);
+    const hit = JSON.parse(out).hits[0];
+    assert.equal(hit.hedged, true, "inferred confidence must be hedged in the data");
+    assert.ok(
+      hit.renderedRationale.startsWith("likely — "),
+      `renderedRationale must carry the hedge prefix:\n${hit.renderedRationale}`,
+    );
+    assert.equal(hit.renderedRationale, "likely — The cache is sized to fit one shard.");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("blame without a target, or with a backwards range, is a usage error", async () => {

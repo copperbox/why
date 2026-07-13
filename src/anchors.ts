@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Anchor, WhyBundle } from "./bundle.js";
+import type { Anchor, WhyBundle, WhyConcept } from "./bundle.js";
 
 export interface LineRange {
   start: number;
@@ -130,6 +130,19 @@ export function buildAnchorIndex(bundle: WhyBundle, head?: string): AnchorIndex 
   const index: AnchorIndex = { paths };
   if (head !== undefined) index.head = head;
   return index;
+}
+
+/**
+ * Resolve an indexed concept id back to its concept. The cache key ties an
+ * index to exact bundle contents, so a miss means the caller paired an index
+ * with some other bundle.
+ */
+export function indexedConcept(bundle: WhyBundle, id: string): WhyConcept {
+  const concept = bundle.concepts.get(id);
+  if (!concept) {
+    throw new Error(`anchor index names unknown concept "${id}" — it was not built from this bundle`);
+  }
+  return concept;
 }
 
 /** Whether an indexed entry's span covers the queried span. */

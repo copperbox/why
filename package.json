@@ -1,6 +1,6 @@
 {
   "name": "@copperbox/why",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Decision archaeology for codebases — recover, anchor, and audit the why behind code.",
   "type": "module",
   "license": "MIT",
@@ -25,6 +25,7 @@
   "devDependencies": {
     "@copperbox/sandcastle-workflow": "^0.4.2",
     "@types/node": "^22.10.0",
+    "ajv": "^8.20.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "yaml": "^2.9.0"

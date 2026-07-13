@@ -21,10 +21,11 @@ import { DigError, extractEpisodes, plural, renderEpisodesReport } from "./dig.j
 import { DigStateError, withDigState, type DigRange, type DigRangeOverrides } from "./dig-state.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
+import { buildGraph, buildUiIndex, EXPORT_TARGETS, ExportError } from "./export.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
 import { lintBundle, renderFindings } from "./lint.js";
 
-export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit", "capture"] as const;
+export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit", "capture", "export"] as const;
 export type Command = (typeof COMMANDS)[number];
 
 /** Where a command's output goes; injectable so tests can capture it. */
@@ -56,6 +57,7 @@ export function usage(): string {
     "  dig      reconstruct decisions from git/PR history",
     "  audit    re-verify constraints; flag expired ones",
     "  capture  draft a concept from a merged PR while the why is fresh",
+    "  export   emit versioned UI-contract JSON (docs/ui-contract.md)",
     "",
     "Options:",
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
@@ -76,6 +78,7 @@ export function usage(): string {
     "  --pr <n>            (capture) draft from a merged/closed PR via gh into .why/.drafts/",
     "  --commit <sha>      (capture) gh-free fallback — draft from a local commit",
     "  --promote <draft>   (capture) lint-gate a draft and move it into its type directory",
+    "  --out <file>        (export) write the payload to a file instead of stdout",
   ].join("\n");
 }
 
@@ -410,6 +413,46 @@ async function runCapture({ values, positionals, bundle, cwd, io }: CommandConte
   }
 }
 
+const EXPORT_USAGE = "usage: why export <ui-index|graph> [--out <file>]";
+
+/**
+ * `why export` — the UI data contract payloads (docs/ui-contract.md):
+ * `ui-index` (per-file coverage map from the anchor index at HEAD) and
+ * `graph` (the bundle as nodes/typed edges). The story payload is
+ * `why blame --json`.
+ */
+async function runExport({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
+  const target = positionals.length === 1 ? positionals[0] : undefined;
+  if (!isOneOf(EXPORT_TARGETS, target)) {
+    io.err(`why export: pass what to export — ${EXPORT_USAGE}`);
+    return 2;
+  }
+  try {
+    let payload: unknown;
+    if (target === "ui-index") {
+      const { index } = await loadAnchorIndex(bundle!);
+      payload = buildUiIndex(bundle!, index);
+    } else {
+      payload = buildGraph(bundle!);
+    }
+    const json = JSON.stringify(payload, null, 2);
+    if (values.out === undefined) {
+      io.out(json);
+    } else {
+      const out = resolve(cwd, values.out as string);
+      await writeFile(out, json + "\n", "utf8");
+      io.out(`wrote ${target} to ${out}`);
+    }
+    return 0;
+  } catch (e) {
+    if (e instanceof ExportError) {
+      io.err(`why export: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 function renderCapture(result: CaptureResult, io: CliIo): number {
   io.out(`drafted ${result.type}: ${result.draftPath}`);
   io.out(`  evidence pack: ${result.evidencePath}`);
@@ -481,6 +524,11 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     },
     needsBundle: true,
     run: runCapture,
+  },
+  export: {
+    options: { ...BUNDLE_OPTIONS, out: { type: "string" } },
+    needsBundle: true,
+    run: runExport,
   },
 };
 
