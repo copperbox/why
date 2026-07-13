@@ -27,5 +27,7 @@ description: Decision archive for the why tool itself — the self-hosted bundle
 ## UI — serve & extension
 
 * [UI ⇄ backend is a versioned JSON data contract](/decisions/ui-data-contract.md) - story/coverage/graph payloads; UIs are dumb renderers and the §2 hedging invariant is structural in the schema
+* [`why serve` is a read-only, foreground, localhost-only viewer](/decisions/serve-local-ui.md) - the one deliberate exception to the no-daemon rule; wraps the CLI's own library calls
+* [The VS Code extension is a standalone package that shells out to the CLI](/decisions/vscode-extension-standalone.md) - own release cadence; electron-free core renders from the contract JSON
 * [Syntax highlighting lives in the client renderer, not the data contract](/decisions/serve-syntax-highlighting.md) - hand-rolled, zero-CDN, and never alters the code it colors
 * [The CLI direct-run guard resolves the entry path's symlinks](/decisions/symlink-safe-direct-run-guard.md) - so symlinked launches (npm bins, the VS Code extension) still run `main()`

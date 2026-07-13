@@ -32,6 +32,10 @@ why:
 
 Recorded in the guard's own comment and the regression test at the time [2]. `import.meta.url` is already realpath-resolved, but `process.argv[1]` keeps the invoked path verbatim. npm's local installs and every `node_modules/.bin` shim are symlinks — and that is exactly how the VS Code extension shells out to the CLI. The old naive string compare therefore never matched under a symlinked launch, so `main()` silently never ran: empty stdout, exit 0, and the extension rendered nothing. Resolving argv[1]'s symlinks to the same realpath (and using `pathToFileURL` so odd characters compare correctly) closes that gap; a regression test launches the CLI through a symlink to keep it closed.
 
+# Because of
+
+- [The VS Code extension is a standalone package that shells out to the CLI](/decisions/vscode-extension-standalone.md)
+
 # Citations
 
 [1] [PR #33: Why serve syntax highlighting](https://github.com/copperbox/why/pull/33)
