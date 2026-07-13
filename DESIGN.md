@@ -175,7 +175,7 @@ Same data over MCP: agents mount the bundle via okf-mcp and get story-of-this-co
 ## 8. Implementation shape
 
 - **Language:** TypeScript (Node), matching okf-mcp; depends on okf-mcp as a library where possible rather than shelling out.
-- **CLI:** `why dig | anchor | audit | blame | capture | lint | doctor | init`. `why init` scaffolds `.why/`, writes the root `index.md` frontmatter, and drops a CLAUDE.md snippet teaching resident agents to consult and maintain the bundle. `why capture` (open problem #5's pipeline) drafts a concept from a merged PR into `.why/.drafts/` — a dot-directory, so drafts never serve — and lint-gates promotion out of it.
+- **CLI:** `why dig | anchor | audit | blame | capture | lint | doctor | export | init`. `why init` scaffolds `.why/`, writes the root `index.md` frontmatter, and drops a CLAUDE.md snippet teaching resident agents to consult and maintain the bundle. `why capture` (open problem #5's pipeline) drafts a concept from a merged PR into `.why/.drafts/` — a dot-directory, so drafts never serve — and lint-gates promotion out of it. `why export` (with `why blame --json`) emits the versioned UI data contract — story, coverage, graph — that every presentation layer renders from without re-deriving semantics ([docs/ui-contract.md](docs/ui-contract.md)).
 - **Agent integration:** dig/audit agent prompts ship as Claude Code skills in `skills/`; the CLI's `--episodes`/`--evidence` subcommands are the deterministic tools those skills call.
 - **No daemon.** Everything is a run-to-completion command suitable for CI (`why anchor --check` and `why lint` as PR gates; `why audit` weekly).
 

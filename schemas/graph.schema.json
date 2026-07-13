@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copperbox/why/schemas/graph.schema.json",
+  "title": "why graph",
+  "description": "Output of `why export graph`: the bundle as nodes and typed edges (relation names from DESIGN.md §3), suitable for direct rendering. docs/ui-contract.md annotates this schema.",
+  "schemaVersion": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "nodes": {
+      "description": "Every concept in the bundle, ordered by id.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "description": "Resolved links in the four §3 edge sections, ordered by (from, relation, to).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "title"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "enum": ["decision", "constraint", "attempt", "incident", "question"] },
+        "title": { "type": "string" },
+        "status": { "type": "string" },
+        "confidence": { "enum": ["recorded", "corroborated", "inferred", "speculative"] },
+        "happened_on": { "type": "string" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "relation"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "relation": { "enum": ["becauseOf", "insteadOf", "supersededBy", "ledTo"] }
+      }
+    }
+  }
+}

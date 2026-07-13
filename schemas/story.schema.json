@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copperbox/why/schemas/story.schema.json",
+  "title": "why story",
+  "description": "Output of `why blame --json`: the decision story behind a file or line range, including the nearest-concepts fallback for uncovered targets. DESIGN.md §7 governs semantics; docs/ui-contract.md annotates this schema.",
+  "schemaVersion": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "target", "hits", "warnings", "nearby"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "lines": { "$ref": "#/$defs/lineRange" }
+      }
+    },
+    "span": {
+      "description": "Narrowest covering anchor span, e.g. \"src/lock.rs:41-58 · acquire_shared\" — present only when something hit.",
+      "type": "string"
+    },
+    "hits": {
+      "description": "Concepts anchored on the target, newest first.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/hit" }
+    },
+    "warnings": {
+      "description": "Expired constraints not already among the hits — never invisible (DESIGN.md §7), each carrying its downstream blast radius.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/hit" }
+    },
+    "nearby": {
+      "description": "The fallback when nothing hits: anchored concepts nearest the target's directory, nearest first.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/nearbyConcept" }
+    }
+  },
+  "$defs": {
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "conceptType": { "enum": ["decision", "constraint", "attempt", "incident", "question"] },
+    "confidence": { "enum": ["recorded", "corroborated", "inferred", "speculative"] },
+    "anchor": {
+      "description": "An anchor claim exactly as written in frontmatter (DESIGN.md §4).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "symbol": { "type": "string" },
+        "lines": { "type": "string" },
+        "as_of": { "type": "string" },
+        "state": { "enum": ["live", "lost"] }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" },
+        "id": { "type": "string" },
+        "type": { "$ref": "#/$defs/conceptType" },
+        "status": { "type": "string" }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "url"],
+      "properties": {
+        "label": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "hit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "type",
+        "description",
+        "hedged",
+        "renderedRationale",
+        "anchors",
+        "edges",
+        "citations",
+        "evidence",
+        "downstream"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "$ref": "#/$defs/conceptType" },
+        "status": { "type": "string" },
+        "happened_on": { "type": "string" },
+        "expired_on": { "type": "string" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "description": {
+          "description": "The one-line rationale as written — render renderedRationale instead.",
+          "type": "string"
+        },
+        "hedged": {
+          "description": "True when confidence sits below corroborated (questions never hedge). Constrained structurally below — a payload cannot claim an unhedged inferred/speculative rationale.",
+          "type": "boolean"
+        },
+        "renderedRationale": {
+          "description": "The rationale with its mandatory hedge prefix baked in (DESIGN.md §2). Renderers display this verbatim and never re-derive hedging. Empty when there is no rationale to show.",
+          "type": "string"
+        },
+        "anchors": {
+          "description": "Anchors of this concept that cover the target (empty on warning entries).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/anchor" }
+        },
+        "edges": {
+          "description": "Outgoing typed edges, grouped by relation (DESIGN.md §3).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["becauseOf", "insteadOf", "supersededBy"],
+          "properties": {
+            "becauseOf": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
+            "insteadOf": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
+            "supersededBy": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+          }
+        },
+        "citations": { "type": "array", "items": { "$ref": "#/$defs/citation" } },
+        "evidence": {
+          "description": "Short citation labels (text before the first colon), deduplicated — the one-line evidence rendering.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "downstream": {
+          "description": "Expired constraints only: active decisions reachable via led-to — the blast radius, candidate scar tissue.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/edge" }
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "The §2 invariant made structural: hedged is true exactly when the concept is a non-question below corroborated, and a hedged rationale starts with a hedge prefix (or is empty when there is no rationale).",
+          "if": {
+            "anyOf": [
+              { "properties": { "type": { "const": "question" } } },
+              {
+                "required": ["confidence"],
+                "properties": { "confidence": { "enum": ["recorded", "corroborated"] } }
+              }
+            ]
+          },
+          "then": { "properties": { "hedged": { "const": false } } },
+          "else": {
+            "properties": {
+              "hedged": { "const": true },
+              "renderedRationale": { "pattern": "^$|^likely — |^speculation, thin evidence — " }
+            }
+          }
+        }
+      ]
+    },
+    "nearbyConcept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "type", "anchor"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "$ref": "#/$defs/conceptType" },
+        "status": { "type": "string" },
+        "anchor": { "$ref": "#/$defs/anchor" }
+      }
+    }
+  }
+}
