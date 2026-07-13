@@ -7,16 +7,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { main } from "../src/cli.ts";
 import {
   extractEpisodes,
-  readHighWaterMark,
   renderEpisodesReport,
   type Episode,
   type EpisodesReport,
 } from "../src/dig.ts";
+import {
+  DIG_STATE_FILENAME,
+  DIG_STATE_VERSION,
+  readDigState,
+  writeDigState,
+} from "../src/dig-state.ts";
 import { scaffoldBundle } from "../src/init.ts";
 import { capture, git, makeRepo, write } from "./helpers.ts";
 
@@ -356,48 +361,75 @@ test("why dig --episodes: --out writes the JSON report; default renders a summar
   assert.equal(report.schema, "why-dig-episodes");
   assert.equal(report.episodes.length, 1);
 
+  // The first run advanced the mark to HEAD, so the default render re-digs
+  // under --full.
   const human = capture();
-  assert.equal(await main(["dig", "--episodes"], repo, human.io), 0);
+  assert.equal(await main(["dig", "--episodes", "--full"], repo, human.io), 0);
   assert.ok(human.out.join("\n").includes("1 episode"), human.out.join("\n"));
 });
 
-test("high-water mark: .dig-state.json bounds the default range; corrupt state runs full", async () => {
+test("high-water mark: dig state bounds the default range and advances on success", async () => {
   const repo = await makeRepo("why-dig-");
   await write(repo, "a.txt", "a\n");
   const first = commitAll(repo, "old", T0);
   await write(repo, "b.txt", "b\n");
-  commitAll(repo, "new", T0 + 10 * DAY);
+  const head = commitAll(repo, "new", T0 + 10 * DAY);
   const whyRoot = await scaffoldBundle(repo);
+  const branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD");
 
-  await writeFile(join(whyRoot, ".dig-state.json"), JSON.stringify({ lastProcessed: first }));
+  await writeDigState(whyRoot, {
+    version: DIG_STATE_VERSION,
+    branches: { [branch]: { lastProcessed: first } },
+  });
   let run = capture();
   assert.equal(await main(["dig", "--episodes", "--json"], repo, run.io), 0);
   let report = JSON.parse(run.out.join("\n")) as EpisodesReport;
   assert.equal(report.range.from, first);
   assert.equal(report.episodes.length, 1);
   assert.equal(report.episodes[0]!.commits[0]!.subject, "new");
+  // A successful emission advanced the mark to HEAD (docs/digging.md).
+  assert.deepEqual((await readDigState(whyRoot))!.branches[branch], { lastProcessed: head });
 
-  // Corrupt state: note on stderr, full history — never a hard failure.
-  await writeFile(join(whyRoot, ".dig-state.json"), "not json");
+  // Nothing new since the mark: an empty report, state untouched.
   run = capture();
   assert.equal(await main(["dig", "--episodes", "--json"], repo, run.io), 0);
+  report = JSON.parse(run.out.join("\n")) as EpisodesReport;
+  assert.equal(report.episodes.length, 0);
+  assert.deepEqual((await readDigState(whyRoot))!.branches[branch], { lastProcessed: head });
+
+  // --full re-digs everything, ignoring the mark.
+  run = capture();
+  assert.equal(await main(["dig", "--episodes", "--json", "--full"], repo, run.io), 0);
   report = JSON.parse(run.out.join("\n")) as EpisodesReport;
   assert.equal(report.range.from, null);
   assert.equal(report.episodes.length, 2);
-  assert.ok(run.err.join("\n").includes("full history"), run.err.join("\n"));
-
-  // A mark the repo no longer resolves also falls back loudly.
-  await writeFile(join(whyRoot, ".dig-state.json"), JSON.stringify({ lastProcessed: "f".repeat(40) }));
-  run = capture();
-  assert.equal(await main(["dig", "--episodes", "--json"], repo, run.io), 0);
-  report = JSON.parse(run.out.join("\n")) as EpisodesReport;
-  assert.equal(report.range.from, null);
-  assert.ok(run.err.join("\n").includes("full history"), run.err.join("\n"));
 });
 
-test("readHighWaterMark: absent file means first run", async () => {
+test("high-water mark: unreadable state is an explicit error, never overwritten", async () => {
   const repo = await makeRepo("why-dig-");
-  assert.equal(readHighWaterMark(repo), null);
+  await write(repo, "a.txt", "a\n");
+  commitAll(repo, "base", T0);
+  const whyRoot = await scaffoldBundle(repo);
+
+  await writeFile(join(whyRoot, DIG_STATE_FILENAME), "not json");
+  let run = capture();
+  assert.equal(await main(["dig", "--episodes", "--json"], repo, run.io), 1);
+  assert.ok(run.err.join("\n").includes("not valid JSON"), run.err.join("\n"));
+
+  // ... even under --full, whose success path would otherwise overwrite it.
+  run = capture();
+  assert.equal(await main(["dig", "--episodes", "--json", "--full"], repo, run.io), 1);
+  assert.equal(await readFile(join(whyRoot, DIG_STATE_FILENAME), "utf8"), "not json");
+
+  // A mark the repository cannot verify never yields a range either.
+  const branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD");
+  await writeDigState(whyRoot, {
+    version: DIG_STATE_VERSION,
+    branches: { [branch]: { lastProcessed: "f".repeat(40) } },
+  });
+  run = capture();
+  assert.equal(await main(["dig", "--episodes", "--json"], repo, run.io), 1);
+  assert.ok(run.err.join("\n").includes("does not resolve"), run.err.join("\n"));
 });
 
 test("rendered summary names episodes and tells", async () => {
@@ -420,18 +452,25 @@ test(
   "slow: runs against this repo's own history and emits schema-valid JSON",
   { skip: process.env.WHY_DIG_SKIP_SLOW !== undefined },
   async () => {
-    const { io, out } = capture();
-    const code = await main(
-      ["dig", "--episodes", "--json", "--bundle", "examples/harbor"],
-      process.cwd(),
-      io,
-    );
-    assert.equal(code, 0);
-    const report = JSON.parse(out.join("\n")) as EpisodesReport;
-    assert.ok(report.episodes.length >= 1, "this repo has history");
-    const schema = await documentedSchema();
-    const errors: string[] = [];
-    validateSchema(schema, report, schema, "$", errors);
-    assert.deepEqual(errors, []);
+    // A successful run advances the harbor bundle's dig state; drop it so the
+    // fixture stays clean and re-runs still see the full history.
+    const state = join(process.cwd(), "examples", "harbor", DIG_STATE_FILENAME);
+    try {
+      const { io, out } = capture();
+      const code = await main(
+        ["dig", "--episodes", "--json", "--full", "--bundle", "examples/harbor"],
+        process.cwd(),
+        io,
+      );
+      assert.equal(code, 0);
+      const report = JSON.parse(out.join("\n")) as EpisodesReport;
+      assert.ok(report.episodes.length >= 1, "this repo has history");
+      const schema = await documentedSchema();
+      const errors: string[] = [];
+      validateSchema(schema, report, schema, "$", errors);
+      assert.deepEqual(errors, []);
+    } finally {
+      await rm(state, { force: true });
+    }
   },
 );

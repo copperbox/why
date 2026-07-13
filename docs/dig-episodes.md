@@ -15,12 +15,16 @@ why dig --episodes --json     # the JSON report to stdout
 why dig --episodes --out episodes.json   # the JSON report to a file
 ```
 
-The range defaults to *high-water mark → HEAD*: if `<bundle>/.dig-state.json`
-exists and carries a usable `lastProcessed` commit, only history after it is
-walked; otherwise (first run, missing/corrupt state, or a mark the repository
-no longer resolves) the full history is walked — a note goes to stderr, never
-a hard failure, because re-digging is safe (synthesis dedupes). Writing the
-state file belongs to the incremental-digs issue, not this command.
+The range defaults to *high-water mark → HEAD* on the current branch:
+`<bundle>/.dig-state.json` — the per-branch, schema-versioned state file whose
+contract lives in [digging.md](digging.md) — records the last commit a
+successful run processed, and only history after it is walked. `--from <rev>`
+starts anywhere; `--full` re-digs all history; absent state (a first run) also
+means full history. The mark advances to HEAD only after a successful episode
+emission. A state file this build cannot read, or a mark the repository cannot
+verify (orphaned by a history rewrite), is an explicit error naming the ways
+out — never a silently wrong range and never overwritten; deleting the state
+file is always safe (extraction is deterministic, synthesis dedupes).
 
 The report is **deterministic** for a given repository state and range: no
 wall-clock timestamps, stable ordering everywhere. Reports can be cached and

@@ -15,13 +15,8 @@ import {
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
-import {
-  DigError,
-  extractEpisodes,
-  readHighWaterMark,
-  renderEpisodesReport,
-  type EpisodesReport,
-} from "./dig.js";
+import { DigError, extractEpisodes, renderEpisodesReport } from "./dig.js";
+import { DigStateError, withDigState, type DigRange, type DigRangeOverrides } from "./dig-state.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
@@ -218,26 +213,12 @@ async function runDigEpisodes({ values, bundle, cwd, io }: CommandContext): Prom
     io.err("why dig: pass --from <rev> or --full, not both");
     return 2;
   }
-  try {
-    // Default range: high-water mark → HEAD; full history when no usable
-    // mark, when --full is given, or when --from overrides it.
-    let from: string | undefined = values.from as string | undefined;
-    if (from === undefined && values.full !== true) {
-      const mark = readHighWaterMark(bundle!.root);
-      if (mark !== null && "note" in mark) io.err(`why dig: ${mark.note}`);
-      from = mark !== null && "sha" in mark ? mark.sha : undefined;
-    }
-    const repo = dirname(bundle!.root);
-    let report: EpisodesReport;
-    try {
-      report = extractEpisodes(repo, { from });
-    } catch (e) {
-      // A mark the repo no longer knows (rebase, gc) must not brick digging:
-      // re-digging everything is documented as safe, so fall back loudly.
-      if (!(e instanceof DigError) || !e.staleFrom) throw e;
-      io.err(`why dig: high-water mark unusable (${e.message}) — running full history`);
-      report = extractEpisodes(repo);
-    }
+  const repo = dirname(bundle!.root);
+  const emitReport = async (range: DigRange): Promise<void> => {
+    const report = extractEpisodes(
+      repo,
+      range.from === undefined ? { to: range.head } : { from: range.from, to: range.head },
+    );
     const json = JSON.stringify(report, null, 2);
     const out = values.out === undefined ? undefined : resolve(cwd, values.out as string);
     if (out !== undefined) await writeFile(out, json + "\n", "utf8");
@@ -248,9 +229,21 @@ async function runDigEpisodes({ values, bundle, cwd, io }: CommandContext): Prom
     } else {
       for (const line of renderEpisodesReport(report)) io.out(line);
     }
+  };
+  try {
+    // Range and high-water mark live in dig-state.ts (docs/digging.md): mark →
+    // HEAD unless --from/--full override, mark advanced only after emitReport
+    // succeeds, unreadable state or an unverifiable mark an explicit error.
+    const overrides: DigRangeOverrides = {};
+    if (values.from !== undefined) overrides.from = values.from as string;
+    if (values.full === true) overrides.full = true;
+    const result = await withDigState(repo, bundle!.root, overrides, emitReport);
+    // Nothing new since the mark: still emit the (empty) report so --json and
+    // --out consumers always get one. The state file is untouched.
+    if (!result.emitted) await emitReport(result);
     return 0;
   } catch (e) {
-    if (e instanceof DigError) {
+    if (e instanceof DigError || e instanceof DigStateError) {
       io.err(`why dig: ${e.message}`);
       return 1;
     }

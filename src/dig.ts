@@ -9,23 +9,10 @@
 // timestamps, stable ordering everywhere — reports get cached and diffed.
 // Judgment (what an episode *means*) belongs to the agent steps, never here.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { git, gitOrThrow } from "./git.js";
 
 /** Operational failure (bad repo, bad range) — the CLI reports it and exits 1. */
-export class DigError extends Error {
-  /**
-   * True when the range start (`from`) is what failed — a caller holding a
-   * stored high-water mark can safely retry over full history.
-   */
-  constructor(
-    message: string,
-    readonly staleFrom = false,
-  ) {
-    super(message);
-  }
-}
+export class DigError extends Error {}
 
 // --- Report shape (the stable JSON surface; see docs/dig-episodes.md) -------
 
@@ -170,7 +157,7 @@ const E = "\x1e"; // end of header
 function resolveCommit(repo: string, rev: string, what: "range start" | "range end"): string {
   const r = git(repo, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
   if (r.status !== 0) {
-    throw new DigError(`${what} "${rev}" does not resolve to a commit`, what === "range start");
+    throw new DigError(`${what} "${rev}" does not resolve to a commit`);
   }
   return r.stdout.trim();
 }
@@ -470,10 +457,7 @@ export function extractEpisodes(repo: string, options: DigOptions = {}): Episode
   if (options.from !== undefined) {
     from = resolveCommit(root, options.from, "range start");
     if (git(root, ["merge-base", "--is-ancestor", from, to]).status !== 0) {
-      throw new DigError(
-        `range start ${options.from} is not an ancestor of ${options.to ?? "HEAD"}`,
-        true,
-      );
+      throw new DigError(`range start ${options.from} is not an ancestor of ${options.to ?? "HEAD"}`);
     }
   }
   const range = from === null ? [to] : [`${from}..${to}`];
@@ -491,35 +475,6 @@ export function extractEpisodes(repo: string, options: DigOptions = {}): Episode
     episodes,
     tells: summarizeTells(episodes),
   };
-}
-
-// --- High-water mark ---------------------------------------------------------
-
-/**
- * Read the dig high-water mark from `<bundle>/.dig-state.json` if one exists
- * and is usable; anything else (absent, unparseable, wrong shape) means a
- * full-history run — re-digging is always safe (synthesis dedupes), a hard
- * failure on stale state would not be. Writing the state file is the
- * incremental-digs issue's job (issues/304), not this module's.
- */
-export function readHighWaterMark(bundleRoot: string): { sha: string } | { note: string } | null {
-  let raw: string;
-  try {
-    raw = readFileSync(join(bundleRoot, ".dig-state.json"), "utf8");
-  } catch {
-    return null; // no state file — first run, full history
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const sha =
-      typeof parsed === "object" && parsed !== null
-        ? (parsed as Record<string, unknown>).lastProcessed
-        : undefined;
-    if (typeof sha === "string" && sha !== "") return { sha };
-    return { note: ".dig-state.json has no usable lastProcessed — running full history" };
-  } catch {
-    return { note: ".dig-state.json is not valid JSON — running full history" };
-  }
 }
 
 // --- Rendering ---------------------------------------------------------------
