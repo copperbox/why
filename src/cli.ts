@@ -484,7 +484,7 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
   },
 };
 
-/** Exit codes: 0 ok, 1 operational error (e.g. no bundle), 2 usage/unimplemented. */
+/** Exit codes: 0 ok, 1 operational error (e.g. no bundle), 2 usage error. */
 export async function main(
   argv: string[],
   cwd: string = process.cwd(),

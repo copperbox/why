@@ -112,6 +112,7 @@ Early implementation. The schema and pipeline are specified, and the CLI foundat
 | [PLAN.md](PLAN.md) | Phased roadmap in session-sized tasks, plus the working protocol for future sessions |
 | [CLAUDE.md](CLAUDE.md) | Orientation for agent sessions in this repo |
 | [examples/harbor/](examples/harbor/) | A hand-authored example bundle for a fictional service — the schema, fully realized in six concepts |
+| [.why/](.why/index.md) | This repo's own decision archive — the self-hosted bundle, kept honest by the CI recipes in [docs/ci.md](docs/ci.md) |
 
 The example bundle is browsable today:
 
