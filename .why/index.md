@@ -19,6 +19,12 @@ description: Decision archive for the why tool itself — the self-hosted bundle
 * [Issues are the spec surface](/decisions/issues-are-the-spec-surface.md) - testable acceptance criteria or autonomous review is meaningless
 * [Circuit breaker: repeated escalation halts the loop for a chat](/decisions/escalation-circuit-breaker.md) - spec rewrites are reserved for humans
 
+## Operational loop
+
+* [`why audit` expires a constraint only on hard evidence](/decisions/audit-expires-on-evidence-only.md) - flip on a non-zero check or explicit "no longer true", never on a timeout; then walk the blast radius
+* [Merge-time capture emits lint-gated drafts into a dot-directory](/decisions/capture-drafts-in-a-dot-directory.md) - `.why/.drafts/` never serves; confidence is `recorded` only when rationale was found
+* [`why` self-hosts its CI](/decisions/why-self-hosts-its-ci.md) - PR gate, weekly audit, post-merge capture, all running the tool on its own bundle
+
 ## Tool behavior
 
 * [`why blame` warns on every expired constraint](/decisions/blame-warns-on-every-expired-constraint.md) - the §5 payoff must never be invisible
