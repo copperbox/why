@@ -294,7 +294,7 @@ function renderHeader(episode: Episode): string {
 
 // --- gh threads --------------------------------------------------------------
 
-interface GhComment {
+export interface GhComment {
   author?: { login?: string };
   body?: string;
   createdAt?: string;
@@ -352,7 +352,8 @@ function renderThread(
   return `${lines.join("\n")}\n`;
 }
 
-function asComments(value: unknown): GhComment[] {
+/** The comment/review shape `gh` returns, tolerantly filtered. */
+export function asComments(value: unknown): GhComment[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 

@@ -1,0 +1,22 @@
+name: why-pr-gate
+
+# PR gate (docs/ci.md): the archive may not merge in a state it cannot back.
+# `why lint` enforces the schema; `why anchor --check` fails on anchor drift
+# without writing anything — run `why anchor` locally and commit the result.
+on:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # anchor resolution traces line ranges from as_of to HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run why -- lint
+      - run: npm run why -- anchor --check

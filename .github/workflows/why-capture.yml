@@ -1,0 +1,34 @@
+name: why-capture
+
+# Post-merge capture (docs/ci.md, docs/capture.md): when a PR closes, draft a
+# concept from its discussion into .why/.drafts/ while the rationale is fresh, and
+# PR the draft back for the editorial promotion step (skills/capture).
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0 # capture reads the merge commit's diff
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run why -- capture --pr ${{ github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          branch: why-drafts
+          add-paths: .why
+          title: "why: capture draft for #${{ github.event.pull_request.number }}"
+          commit-message: "why capture: draft from #${{ github.event.pull_request.number }}"

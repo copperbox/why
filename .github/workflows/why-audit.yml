@@ -1,0 +1,55 @@
+name: why-audit
+
+# Weekly constraint re-verification (docs/ci.md). `why audit` exits 1 when a
+# constraint newly expired — the signal that the archive learned something —
+# so the report becomes a GitHub issue and the flipped bundle a PR; any other
+# non-zero exit fails the job loudly.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: run the audit
+        id: audit
+        run: |
+          set +e
+          npm run --silent why -- audit > audit-report.txt 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          cat audit-report.txt
+      - name: fail on audit errors
+        if: steps.audit.outputs.exit != '0' && steps.audit.outputs.exit != '1'
+        run: |
+          echo "why audit failed (exit ${{ steps.audit.outputs.exit }})"
+          exit 1
+      - name: open an issue from the scar-tissue report
+        if: steps.audit.outputs.exit == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "why audit: a constraint expired ($(date -u +%Y-%m-%d))" \
+            --body-file audit-report.txt
+      - name: PR the expiry write-back (status flip + question concepts)
+        if: steps.audit.outputs.exit == '1'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: why-audit
+          add-paths: .why
+          title: "why audit: expired constraint write-back"
+          commit-message: "why audit: constraint expired — status flip + downstream questions"
