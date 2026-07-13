@@ -226,12 +226,14 @@ test("the built app boots in jsdom: tree renders, gutter paints, click tells the
   assert.ok(gutter.classList.contains("why-conf-recorded"), gutter.className);
   assert.equal(gutter.textContent, "●");
 
-  // Click line 47 → the story panel renders the hit and the loud warning.
+  // Click line 47 → the story panel renders the loud warning first (matching
+  // the VS Code hover/webview order), then the hit.
   (line47 as HTMLElement).click();
   const panel = await until(() => doc.querySelector(".story-panel .card"), "the story panel");
   const text = doc.querySelector(".story-panel")!.textContent!;
-  assert.ok(panel.textContent!.includes("Queue-based locking"), text);
-  assert.ok(text.includes("EXPIRED 2025-06-30"), text);
+  assert.ok(panel.classList.contains("warning"), `first card should be the warning: ${text}`);
+  assert.ok(panel.textContent!.includes("EXPIRED 2025-06-30"), text);
+  assert.ok(text.includes("Queue-based locking"), text);
   assert.ok(text.includes("may now be scar tissue"), text);
 });
 

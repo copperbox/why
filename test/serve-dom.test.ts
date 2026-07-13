@@ -123,6 +123,13 @@ test("story panel: hedge prefix and expired warning survive into the DOM", async
     assert.ok(scar, "the downstream blast radius renders");
     assert.equal(scar.textContent, '→ downstream decision "Hunch" may now be scar tissue.');
 
+    // Warnings render before hits, matching the VS Code hover/webview order.
+    const hit = doc.querySelector(".card.type-decision")!;
+    assert.ok(
+      warning.compareDocumentPosition(hit) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+      "the expired-constraint warning card precedes the hit card in the DOM",
+    );
+
     // Citations render as real links.
     const citation = doc.querySelector(".card.type-decision .citations a") as HTMLAnchorElement;
     assert.ok(citation, "citations render as links");

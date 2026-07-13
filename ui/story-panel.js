@@ -108,8 +108,10 @@ export function renderStoryPanel(doc, story) {
   if (story.hits.length === 0) {
     root.append(el(doc, "p", "story-empty", `No concepts anchor ${formatTarget(story.target)}.`));
   }
-  for (const hit of story.hits) root.append(renderCard(doc, hit, false));
+  // Warnings first, matching the VS Code hover/webview order — both surfaces
+  // must tell the same story, and expired constraints stay loud.
   for (const warning of story.warnings) root.append(renderCard(doc, warning, true));
+  for (const hit of story.hits) root.append(renderCard(doc, hit, false));
   if (story.hits.length === 0 && story.nearby.length > 0) {
     root.append(el(doc, "h3", "nearby-head", "Anchored concepts nearby (nearest first)"));
     const list = el(doc, "ul", "nearby");
