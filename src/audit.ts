@@ -22,6 +22,7 @@ import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { extractSection, updateConcept, writeConcept } from "@copperbox/okf-mcp";
 import { isOneOf, isPlainMap, type WhyBundle, type WhyConcept } from "./bundle.js";
+import { plural } from "./dig.js";
 
 const execAsync = promisify(exec);
 
@@ -567,21 +568,22 @@ export async function auditBundle(bundle: WhyBundle, options: AuditOptions = {})
 
 // --- Rendering ---------------------------------------------------------------
 
-function count(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
 export function renderAuditReport(report: AuditReport): string[] {
   const lines: string[] = [];
-  lines.push(`why audit: ${count(report.activeConstraints, "active constraint")} at ${report.root}`);
+  lines.push(`why audit: ${plural(report.activeConstraints, "active constraint")} at ${report.root}`);
 
   const swept =
     report.checks.length + report.asks.length + report.reviewByPastDue.length + report.unverifiable.length > 0;
   if (swept) lines.push("");
   for (const check of report.checks) {
-    const label = check.outcome === "failed" ? "FAILED" : check.outcome;
-    const suffix =
-      check.outcome === "passed" ? "" : check.outcome === "failed" ? ` (exit ${check.exitCode})` : ` — ${check.detail}`;
+    let label: string = check.outcome;
+    let suffix = "";
+    if (check.outcome === "failed") {
+      label = "FAILED";
+      suffix = ` (exit ${check.exitCode})`;
+    } else if (check.outcome === "error") {
+      suffix = ` — ${check.detail}`;
+    }
     lines.push(`  check     ${label.padEnd(8)} ${check.concept}  \`${check.command}\`${suffix}`);
   }
   for (const ask of report.asks) {
@@ -599,7 +601,7 @@ export function renderAuditReport(report: AuditReport): string[] {
   }
   if (report.questionnaire !== null) {
     const unanswered = report.asks.filter((a) => a.answer === "unknown").length;
-    lines.push("", `wrote questionnaire (${count(unanswered, "unanswered ask")}) to ${report.questionnaire}`);
+    lines.push("", `wrote questionnaire (${plural(unanswered, "unanswered ask")}) to ${report.questionnaire}`);
   }
 
   if (report.expired.length > 0) {
@@ -629,7 +631,7 @@ export function renderAuditReport(report: AuditReport): string[] {
   lines.push("");
   if (report.expired.length > 0) {
     lines.push(
-      `${count(report.expired.length, "constraint")} expired this run — the archive learned something (exit 1)`,
+      `${plural(report.expired.length, "constraint")} expired this run — the archive learned something (exit 1)`,
     );
   } else {
     lines.push("nothing newly expired");

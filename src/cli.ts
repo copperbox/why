@@ -6,8 +6,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
-import { AuditError, auditBundle, parseAnswers, renderAuditReport, type AnswerEntry } from "./audit.js";
 import { CACHE_DIRNAME, ensureSelfIgnoringDir, loadAnchorIndex } from "./anchors.js";
+import { AuditError, auditBundle, parseAnswers, renderAuditReport, type AnswerEntry } from "./audit.js";
 import {
   BlameTargetError,
   buildBlameReport,
