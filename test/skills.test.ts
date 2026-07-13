@@ -18,7 +18,7 @@ const SKILL_PATHS = [
   "skills/dig-synthesize/SKILL.md",
   "skills/capture/SKILL.md",
 ];
-const DOC_PATHS = [...SKILL_PATHS, "docs/digging.md", "docs/capture.md"];
+const DOC_PATHS = [...SKILL_PATHS, "docs/digging.md", "docs/capture.md", "docs/ci.md"];
 
 /** `why <sub>` may only name subcommands implemented by this point in the
  * plan (all of Phases 1–4 now: audit and capture are real). */
@@ -44,6 +44,7 @@ const NON_TOOL_TOKENS = new Set([
   "retry_jitter",
   "acquire_shared",
   "pull_request",
+  "workflow_dispatch",
 ]);
 
 /** Everything an agent would treat as runnable: fenced blocks + inline code. */

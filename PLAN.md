@@ -10,8 +10,8 @@ Every session in this repo:
 
 1. Read `CLAUDE.md`, then skim this file to find the current phase (first phase with unchecked tasks).
 2. Pick the next unchecked task — or the task the user names. Tasks are ordered; don't skip ahead unless blocked.
-3. Before building, check the task's *Decide* items (if any) — settle them with the user or record the choice in the [Decision log](#decision-log).
-4. Check the box when done, note anything surprising under the task, and add a Decision log entry for any choice that deviates from [DESIGN.md](DESIGN.md).
+3. Before building, check the task's *Decide* items (if any) — settle them with the user or record the choice as a `decision` concept in [.why/](.why/index.md) (the [Decision log](#decision-log) that used to live in this file).
+4. Check the box when done, note anything surprising under the task, and record any choice that deviates from [DESIGN.md](DESIGN.md) as a decision concept in `.why/`.
 5. If DESIGN.md turned out to be wrong, fix DESIGN.md in the same session — it is the source of truth and must not drift from reality.
 
 Keep this file honest: it is the memory between sessions.
@@ -46,7 +46,7 @@ Goal: anchors survive real development. This is the make-or-break phase — if r
 - [ ] `why anchor` — full resolution order from DESIGN.md §4, frontmatter-only updates via okf-mcp, `--check` mode for CI
 - [x] `why doctor` — report lost anchors, stale `as_of`s, audit-overdue constraints
 - [ ] Torture test: replay ~50 real commits of an actual repo (okf-mcp's own history is right here) over a seeded bundle; measure anchor survival rate. **Target: >90% of anchors either resolve correctly or honestly report lost — zero silently-wrong anchors.**
-- [ ] Decide open problem #1 (wholesale-rewrite policy) from the torture-test data; record in Decision log
+- [ ] Decide open problem #1 (wholesale-rewrite policy) from the torture-test data; record as a decision concept in `.why/`
 
 ## Phase 3 — Archaeology: `why dig`
 
@@ -80,15 +80,9 @@ Goal: the why visible where people read and edit code, and `why` running on a re
 
 ## Decision log
 
-Choices made along the way, newest first.
-
-- **2026-07-12 — `why doctor` reports expired constraints as a section of their own (yellow)**: the issue-205 scope list names lost anchors, stale `as_of`s, overdue `review-by`s, `status: unknown`, open questions, and lint errors — but its acceptance criteria pin harbor's by-design *expired* constraint producing a yellow finding, which no listed section would catch (harbor's verify method is `ask`, not `review-by`). Doctor therefore carries an `expiredConstraints` section, matching its usage line ("lost anchors and stale constraints") and this plan's "audit-overdue constraints" wording; the §5 blast-radius walk stays `why audit`'s job. Also decided: a live anchor whose `as_of` doesn't resolve in the enclosing repo is reported stale (reason `unresolved`) rather than skipped — a claim the repo can't verify must not read as healthy — which is why doctor on `examples/harbor` shows six stale anchors citing the fictional harbor repo's commits. *Confidence: recorded.*
-- **2026-07-12 — `why blame` warns on every expired constraint, not only upstream ones**: the README example (the issue-104 rendering target) shows the Acme warning under `src/lock.rs:47`, a file no edge connects to that constraint, and the acceptance criteria pin that behavior. The expired-constraint report is the tool's payoff (DESIGN.md §5) and must stay visible until resolved; scoping it to upstream edges would hide it on most queries. DESIGN.md §7.3 updated to say so, along with the exact hedge prefixes ("likely — ", "speculation, thin evidence — "; unstated confidence hedges hardest). *Confidence: recorded.*
-- **2026-07-12 — Circuit breaker: repeated escalation halts the loop for a chat**: an issue's second gate escalation removes it from the queue, labels it `needs-chat` with a chat-agenda comment, and the gate exits HALTED (5) at the phase boundary instead of promoting past the hole. Rewriting a failing spec is the one act the pipeline reserves for humans+chat, and now that's enforced mechanically instead of advised in prose. Details: `AUTOBUILD.md`. *Confidence: recorded.*
-- **2026-07-11 — Autonomous build via Sandcastle + gatekeeper**: implementation delegated to the issue→PR pipeline with an agent replacing the human merge gate; in-gate remediation instead of the workflow's responder (which ignores its own login's feedback); phase labels + gate promotion enforce PLAN ordering. Full rationale and risk register: `AUTOBUILD.md`. *Confidence: recorded.*
-- **2026-07-11 — Issues are the spec surface**: each Phase 1–4 task became a self-contained issue in `issues/` with testable acceptance criteria, because the pipeline's implementers and the gate both judge against issue text — vague issues make autonomous review meaningless. *Confidence: recorded.* When `why` can run on its own repo, these migrate into `.why/` — until then this section *is* the bundle.
-
-- **2026-07-11 — Consumption before archaeology** (Phase 1 before Phase 3): a CLI over hand-written bundles proves the read-side value cheaply and gives dig a target to hit; digging into a format nobody has felt the value of risks building the hard part for an unproven payoff. *Confidence: recorded.*
-- **2026-07-11 — Extension keys namespaced under a single `why:` frontmatter map** rather than flat keys: collision-proof against future OKF versions; OKF preserves unknown keys so plain okf-mcp round-trips it. *Confidence: recorded.*
-- **2026-07-11 — Edge types by section convention, not new syntax**: keeps bundles valid OKF and legible in Obsidian; the alternative (typed-link syntax) would fork the format and break the "any editor" property. *Confidence: recorded.*
-- **2026-07-11 — OKF/okf-mcp as substrate** rather than a bespoke store: decisions-as-documents, dual human/agent audience, MCP consumption for free, git-visible history. Origin: this project was conceived in conversation alongside okf-mcp. *Confidence: recorded.*
+Retired 2026-07-13 — `why` now runs on its own repository. Every entry that
+lived here was converted into a `decision` concept (confidence `recorded`,
+citations to this repo's commits/PRs) in the self-hosted bundle:
+**[.why/decisions/](.why/decisions/)**, indexed at [.why/index.md](.why/index.md).
+Record new decisions there (via `why capture` post-merge, or by hand); the CI
+jobs in [docs/ci.md](docs/ci.md) keep the bundle linted, anchored, and audited.

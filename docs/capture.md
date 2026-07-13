@@ -88,34 +88,13 @@ the capture skill: [skills/capture/SKILL.md](../skills/capture/SKILL.md).
 
 ## Wiring it as a post-merge CI job
 
-Run capture when a PR closes, and commit the draft back (here via a PR so the
-draft itself gets a human glance; a direct push to a `why-drafts` branch works
-too):
+Run capture when a PR closes, and commit the draft back via a PR so the draft
+itself gets a human glance (a direct push to a `why-drafts` branch works
+too). The copy-pasteable workflow lives with the other CI recipes in
+[docs/ci.md](ci.md#post-merge-capture-why-capture) — it is the same
+`why-capture.yml` this repository runs on itself under `.github/workflows/`.
 
-```yaml
-name: why capture
-on:
-  pull_request:
-    types: [closed]
-jobs:
-  capture:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0        # capture reads the merge commit's diff
-      - run: npx -y @copperbox/why capture --pr ${{ github.event.pull_request.number }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - uses: peter-evans/create-pull-request@v6
-        with:
-          branch: why-drafts
-          title: "why: capture draft for #${{ github.event.pull_request.number }}"
-          commit-message: "why capture: draft from #${{ github.event.pull_request.number }}"
-```
-
-Notes:
+Notes that survive whatever workflow shape you pick:
 
 - `fetch-depth: 0` (or at least a deep-enough fetch) matters: without the
   merge commit in the clone, capture still drafts but honestly reports "no
