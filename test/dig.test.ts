@@ -347,6 +347,17 @@ test("why dig without --episodes says what is implemented and exits 2", async ()
   assert.ok(err.join("\n").includes("--episodes"), err.join("\n"));
 });
 
+test("why dig --episodes with --evidence is an explicit usage error, not a silent ignore", async () => {
+  const { io, err } = capture();
+  const code = await main(
+    ["dig", "--episodes", "--evidence", "episodes.json", "--bundle", "examples/harbor"],
+    process.cwd(),
+    io,
+  );
+  assert.equal(code, 2);
+  assert.ok(err.join("\n").includes("usage: why dig"), err.join("\n"));
+});
+
 test("why dig --episodes: --out writes the JSON report; default renders a summary", async () => {
   const repo = await makeRepo("why-dig-");
   await write(repo, "a.txt", "a\n");
@@ -356,7 +367,7 @@ test("why dig --episodes: --out writes the JSON report; default renders a summar
 
   const { io, out } = capture();
   assert.equal(await main(["dig", "--episodes", "--out", outFile], repo, io), 0);
-  assert.ok(out.join("\n").includes(`wrote 1 episodes to ${outFile}`), out.join("\n"));
+  assert.ok(out.join("\n").includes(`wrote 1 episode to ${outFile}`), out.join("\n"));
   const report = JSON.parse(await readFile(outFile, "utf8")) as EpisodesReport;
   assert.equal(report.schema, "why-dig-episodes");
   assert.equal(report.episodes.length, 1);

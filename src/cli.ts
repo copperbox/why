@@ -15,7 +15,7 @@ import {
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
-import { DigError, extractEpisodes, renderEpisodesReport } from "./dig.js";
+import { DigError, extractEpisodes, plural, renderEpisodesReport } from "./dig.js";
 import { DigStateError, withDigState, type DigRange, type DigRangeOverrides } from "./dig-state.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
@@ -225,7 +225,7 @@ async function runDigEpisodes({ values, bundle, cwd, io }: CommandContext): Prom
     if (values.json === true) {
       io.out(json);
     } else if (out !== undefined) {
-      io.out(`wrote ${report.episodes.length} episodes to ${out}`);
+      io.out(`wrote ${plural(report.episodes.length, "episode")} to ${out}`);
     } else {
       for (const line of renderEpisodesReport(report)) io.out(line);
     }
@@ -258,6 +258,10 @@ async function runDig({ values, positionals, bundle, cwd, io }: CommandContext):
   }
   if (values.episodes !== true && (values.from !== undefined || values.full === true)) {
     io.err("why dig: --from/--full set the --episodes range — pass --episodes too");
+    return 2;
+  }
+  if (values.episodes === true && values.evidence !== undefined) {
+    io.err(`why dig: --episodes and --evidence are separate modes, pass one — ${DIG_USAGE}`);
     return 2;
   }
   if (values.episodes === true) {
