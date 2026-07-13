@@ -41,6 +41,8 @@ function doc(type: string, title: string, whyLines: string[], bodyLines: string[
 
 const WHY_SECTION = "# Why\n\nBecause reasons.";
 const STILL_TRUE = "# Still true?\n\nChecked recently.";
+/** A short rev no throwaway repo will contain — forces the `unresolved` reason. */
+const STALE_REV = "badc0de";
 
 /**
  * A repo two commits deep (so c1 is a real ancestor behind HEAD) whose bundle
@@ -66,12 +68,22 @@ async function seedClinic(): Promise<{ repo: string; whyRoot: string; c1: string
     `    as_of: "${c1}"`,
     "    state: lost",
   ], [WHY_SECTION]));
-  await write(repo, ".why/decisions/stale-anchor.md", doc("decision", "Stale anchor", [
+  // A clean ancestor of HEAD is stable provenance, not drift — never flagged.
+  await write(repo, ".why/decisions/stable-anchor.md", doc("decision", "Stable anchor", [
     "status: active",
     "anchors:",
     "  - path: src/app.ts",
     "    lines: 1",
     `    as_of: "${c1}"`,
+    "    state: live",
+  ], [WHY_SECTION]));
+  // An as_of this repository cannot resolve is a real staleAsOf finding.
+  await write(repo, ".why/decisions/unresolved-anchor.md", doc("decision", "Unresolved anchor", [
+    "status: active",
+    "anchors:",
+    "  - path: src/app.ts",
+    "    lines: 1",
+    `    as_of: "${STALE_REV}"`,
     "    state: live",
   ], [WHY_SECTION]));
   await write(repo, ".why/constraints/review-overdue.md", doc("constraint", "Review overdue", [
@@ -127,7 +139,7 @@ test("temp bundle: every section appears with the right count and severity, exit
     }
 
     assert.equal(report.head, head);
-    assert.equal(report.concepts, 8);
+    assert.equal(report.concepts, 9);
     assert.equal(report.healthy, false);
     assert.equal(report.red, 2);
     assert.equal(report.yellow, 6);
@@ -138,8 +150,10 @@ test("temp bundle: every section appears with the right count and severity, exit
       { concept: "decisions/lost-anchor", path: "src/gone.rs", lines: "3-4", as_of: c1 },
     ]);
     assert.equal(s.staleAsOf.severity, "yellow");
+    // Only the unresolvable as_of is flagged; the clean-ancestor stable-anchor
+    // (as_of c1, an ancestor of HEAD) is healthy provenance and stays absent.
     assert.deepEqual(s.staleAsOf.items, [
-      { concept: "decisions/stale-anchor", path: "src/app.ts", lines: "1", as_of: c1, reason: "behind-head" },
+      { concept: "decisions/unresolved-anchor", path: "src/app.ts", lines: "1", as_of: STALE_REV, reason: "unresolved" },
     ]);
     assert.equal(s.reviewByPastDue.severity, "yellow");
     assert.deepEqual(s.reviewByPastDue.items, [
