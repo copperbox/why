@@ -37,6 +37,10 @@ The `why serve` file view colors the code it blames with a hand-rolled, dependen
 
 Recorded in the module's own header at the time [2]. Two reasons fix its shape. First, **zero-CDN, self-contained**: the highlighter is hand-rolled with no dependency, the same philosophy as the graph's canvas force sim — the served UI pulls nothing at runtime. Second, **presentation is not the contract**: highlighting only recolors text the blame API already returns and asserts nothing about the *why*, so it belongs in the client renderer, not in the versioned UI data contract. The verbatim round-trip is enforced as an invariant precisely because coloring must never change what HEAD blamed.
 
+# Because of
+
+- [The UI ⇄ backend boundary is a versioned JSON data contract](/decisions/ui-data-contract.md)
+
 # Citations
 
 [1] [PR #33: Why serve syntax highlighting](https://github.com/copperbox/why/pull/33)
