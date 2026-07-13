@@ -7,6 +7,7 @@
 import { deriveTitle, extractCitations } from "@copperbox/okf-mcp";
 import {
   buildAnchorIndex,
+  indexedConcept,
   lookupAnchors,
   parseLineRange,
   type AnchorHit,
@@ -283,12 +284,7 @@ export function buildBlameReport(
     else hitsByConcept.set(hit.conceptId, [hit]);
   }
   const matched = [...hitsByConcept.entries()].map(([id, hits]) => {
-    const concept = bundle.concepts.get(id);
-    if (!concept) {
-      // The cache key ties an index to exact bundle contents; disagreeing
-      // here means the caller mixed an index with some other bundle.
-      throw new Error(`anchor index names unknown concept "${id}" — it was not built from this bundle`);
-    }
+    const concept = indexedConcept(bundle, id);
     hits.sort((a, b) => a.anchorIndex - b.anchorIndex); // anchors in written order
     return { concept, anchors: hits.map((hit) => hit.anchor) };
   });
@@ -316,7 +312,9 @@ export function buildBlameReport(
 const TITLE_COLUMN = 40;
 
 /** Status glyph vocabulary — shared with `why export ui-index` (docs/ui-contract.md). */
-export function glyphFor(type: string, status: string | undefined): string {
+export type Glyph = "●" | "⚠" | "?";
+
+export function glyphFor(type: string, status: string | undefined): Glyph {
   if (type === "question") return "?";
   if (status === "expired" || status === "superseded") return "⚠";
   return "●";
