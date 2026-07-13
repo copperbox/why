@@ -10,7 +10,7 @@ why:
   confidence: recorded
   anchors:
     - path: HOWTO.md
-      as_of: 83607dc
+      as_of: dc2dd35
       state: live
 ---
 
@@ -38,4 +38,4 @@ are recorded — there is no separate plan file to keep in sync.
 
 # Citations
 
-[1] [docs cleanup — remove PLAN.md/NOTES.md, add HOWTO.md](https://github.com/copperbox/why/commits/main)
+[1] [dc2dd35 — retire PLAN.md/NOTES.md, add HOWTO.md](https://github.com/copperbox/why/commit/dc2dd35322f53b3c11c5a5de56991decc577b4df)
