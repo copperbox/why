@@ -4,6 +4,7 @@
 // from the JSON API; nothing here re-derives them (docs/ui-contract.md).
 
 import { renderGraph, TYPE_COLORS } from "./graph.js";
+import { appendTokens, langForPath, tokenize } from "./highlight.js";
 import { renderStoryPanel } from "./story-panel.js";
 
 const doc = document;
@@ -143,6 +144,8 @@ async function showFile(path, fileView, storyPanel) {
   const spans = state.coverage.get(path) ?? [];
 
   const table = h("table", "code");
+  const lang = langForPath(path);
+  let hlState = null; // threaded across lines so a block comment can span rows
   let prevSha = "";
   blame.lines.forEach((line, i) => {
     const n = i + 1;
@@ -164,7 +167,11 @@ async function showFile(path, fileView, storyPanel) {
       row.classList.add("covered");
     }
     row.append(why);
-    row.append(h("td", "text", line.text));
+    const textCell = h("td", "text");
+    const { tokens, state } = tokenize(line.text, lang, hlState);
+    hlState = state;
+    appendTokens(doc, textCell, tokens);
+    row.append(textCell);
     row.onclick = () => showStory(path, n, storyPanel);
     table.append(row);
   });
