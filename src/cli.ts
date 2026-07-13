@@ -3,7 +3,7 @@
 // DESIGN.md is the source of truth for what each subcommand must do.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
 import { CACHE_DIRNAME, ensureSelfIgnoringDir, loadAnchorIndex } from "./anchors.js";
@@ -15,6 +15,8 @@ import {
 } from "./blame.js";
 import { isOneOf, loadBundle, type WhyBundle } from "./bundle.js";
 import { BundleNotFoundError, resolveBundleRoot } from "./discover.js";
+import { DigError, extractEpisodes, plural, renderEpisodesReport } from "./dig.js";
+import { DigStateError, withDigState, type DigRange, type DigRangeOverrides } from "./dig-state.js";
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
@@ -56,15 +58,16 @@ export function usage(): string {
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
     "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
-    "  --json              (blame, lint, doctor) emit the results as JSON",
+    "  --json              (blame, lint, doctor, dig) emit the results as JSON",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
+    "  --episodes          (dig) extract commit episodes + tells from git history",
     "  --from <rev>        (dig --episodes) dig from <rev> instead of the recorded high-water mark",
     "  --full              (dig --episodes) re-dig all history, ignoring the high-water mark",
     "  --evidence <file>   (dig) assemble evidence packs from an --episodes JSON file",
     "  --evidence-dir <dir>  (dig) merge in local exported context (postmortems, chats)",
     "  --max-chars <n>     (dig) total size budget per evidence pack",
-    "  --out <dir>         (dig) pack output dir (default <bundle>/.cache/evidence)",
+    "  --out <file|dir>    (dig) write the JSON report to a file (--episodes) or pack output dir (--evidence, default <bundle>/.cache/evidence)",
   ].join("\n");
 }
 
@@ -196,31 +199,77 @@ async function runDoctor({ values, positionals, bundle, io }: CommandContext): P
   return report.healthy ? 0 : 1;
 }
 
+const DIG_USAGE =
+  "usage: why dig --episodes [--json] [--from <rev>|--full] [--out <file>] | " +
+  "--evidence <episodes.json> [--evidence-dir <dir>] [--max-chars <n>] [--out <dir>]";
+
 /**
- * `why dig --evidence <episodes.json>` — assemble one evidence pack per
- * episode (DESIGN.md §6 step 2). `--episodes` extraction is a later issue;
- * until it lands the episodes JSON comes from wherever the caller got it.
+ * `why dig` — either `--episodes` (deterministic episode extraction + tells,
+ * DESIGN.md §6 step 1) or `--evidence <episodes.json>` (assemble one evidence
+ * pack per episode, DESIGN.md §6 step 2).
  */
-async function runDig({ values, positionals, bundle, io }: CommandContext): Promise<number> {
-  const usageLine =
-    "usage: why dig --evidence <episodes.json> [--evidence-dir <dir>] [--max-chars <n>] [--out <dir>]";
+async function runDigEpisodes({ values, bundle, cwd, io }: CommandContext): Promise<number> {
+  if (values.from !== undefined && values.full === true) {
+    io.err("why dig: pass --from <rev> or --full, not both");
+    return 2;
+  }
+  const repo = dirname(bundle!.root);
+  const emitReport = async (range: DigRange): Promise<void> => {
+    const report = extractEpisodes(
+      repo,
+      range.from === undefined ? { to: range.head } : { from: range.from, to: range.head },
+    );
+    const json = JSON.stringify(report, null, 2);
+    const out = values.out === undefined ? undefined : resolve(cwd, values.out as string);
+    if (out !== undefined) await writeFile(out, json + "\n", "utf8");
+    if (values.json === true) {
+      io.out(json);
+    } else if (out !== undefined) {
+      io.out(`wrote ${plural(report.episodes.length, "episode")} to ${out}`);
+    } else {
+      for (const line of renderEpisodesReport(report)) io.out(line);
+    }
+  };
+  try {
+    // Range and high-water mark live in dig-state.ts (docs/digging.md): mark →
+    // HEAD unless --from/--full override, mark advanced only after emitReport
+    // succeeds, unreadable state or an unverifiable mark an explicit error.
+    const overrides: DigRangeOverrides = {};
+    if (values.from !== undefined) overrides.from = values.from as string;
+    if (values.full === true) overrides.full = true;
+    const result = await withDigState(repo, bundle!.root, overrides, emitReport);
+    // Nothing new since the mark: still emit the (empty) report so --json and
+    // --out consumers always get one. The state file is untouched.
+    if (!result.emitted) await emitReport(result);
+    return 0;
+  } catch (e) {
+    if (e instanceof DigError || e instanceof DigStateError) {
+      io.err(`why dig: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
+async function runDig({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
   if (positionals.length > 0) {
-    io.err(`why dig: takes no positional arguments — ${usageLine}`);
+    io.err(`why dig: takes no positional arguments — ${DIG_USAGE}`);
     return 2;
   }
   if (values.episodes !== true && (values.from !== undefined || values.full === true)) {
     io.err("why dig: --from/--full set the --episodes range — pass --episodes too");
     return 2;
   }
-  if (values.episodes === true) {
-    // Extraction is issues/301; its incremental range/state layer already
-    // exists (src/dig-state.ts) and this handler will wrap it in withDigState.
-    io.err("why dig --episodes: not implemented yet (see PLAN.md for the phase that delivers it)");
+  if (values.episodes === true && values.evidence !== undefined) {
+    io.err(`why dig: --episodes and --evidence are separate modes, pass one — ${DIG_USAGE}`);
     return 2;
+  }
+  if (values.episodes === true) {
+    return runDigEpisodes({ values, positionals, bundle, cwd, io });
   }
   const episodesFile = values.evidence as string | undefined;
   if (episodesFile === undefined) {
-    io.err(`why dig: pass a mode — ${usageLine}`);
+    io.err(`why dig: pass a mode — ${DIG_USAGE}`);
     return 2;
   }
   let maxChars: number | undefined;
@@ -304,6 +353,7 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     options: {
       ...BUNDLE_OPTIONS,
       episodes: { type: "boolean" },
+      json: { type: "boolean" },
       from: { type: "string" },
       full: { type: "boolean" },
       evidence: { type: "string" },

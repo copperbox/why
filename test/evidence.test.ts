@@ -349,17 +349,13 @@ test("why dig --evidence writes one pack per episode into the self-ignoring cach
   assert.ok(text.includes("unavailable: PR #7"), text);
 });
 
-test("why dig usage errors: no mode, --episodes stub, bad --max-chars, unreadable file", async () => {
+test("why dig usage errors: no mode, bad --max-chars, unreadable file", async () => {
   const { repo } = await seedRepo();
   const whyRoot = await scaffoldBundle(repo);
 
   const bare = capture();
   assert.equal(await main(["dig", "--bundle", whyRoot], repo, bare.io), 2);
   assert.ok(bare.err.join("\n").includes("--evidence <episodes.json>"), bare.err.join("\n"));
-
-  const episodes = capture();
-  assert.equal(await main(["dig", "--episodes", "--bundle", whyRoot], repo, episodes.io), 2);
-  assert.ok(episodes.err.join("\n").includes("not implemented yet"), episodes.err.join("\n"));
 
   const eps = join(repo, "eps.json");
   await writeFile(eps, "[]");

@@ -19,6 +19,7 @@ import {
   writeDigState,
   type DigRange,
 } from "../src/dig-state.ts";
+import { scaffoldBundle } from "../src/init.ts";
 import { capture, git, makeRepo, write } from "./helpers.ts";
 
 /** One commit with unique content; returns the full sha. */
@@ -248,14 +249,21 @@ test(`state file is inspectable: pretty JSON named ${DIG_STATE_FILENAME}, absent
 });
 
 test("cli: --from/--full belong to --episodes; without it they are usage errors", async () => {
-  const harbor = "examples/harbor";
-  for (const flags of [["--full"], ["--from", "abc123"]]) {
-    const { io, err } = capture();
-    assert.equal(await main(["dig", ...flags, "--bundle", harbor], process.cwd(), io), 2);
-    assert.ok(err.join("\n").includes("--episodes"), err.join("\n"));
+  // A throwaway repo, not examples/harbor: a real run would write a
+  // .dig-state.json into the committed fixture.
+  const repo = await makeRepo("why-dig-state-cli-");
+  try {
+    await addCommit(repo, "base");
+    await scaffoldBundle(repo);
+    for (const flags of [["--full"], ["--from", "abc123"]]) {
+      const { io, err } = capture();
+      assert.equal(await main(["dig", ...flags], repo, io), 2);
+      assert.ok(err.join("\n").includes("--episodes"), err.join("\n"));
+    }
+    // With --episodes they parse and run the real extraction.
+    const { io } = capture();
+    assert.equal(await main(["dig", "--episodes", "--full"], repo, io), 0);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
   }
-  // With --episodes they parse, and land on the extraction stub (issues/301).
-  const { io, err } = capture();
-  assert.equal(await main(["dig", "--episodes", "--full", "--bundle", harbor], process.cwd(), io), 2);
-  assert.ok(err.join("\n").includes("not implemented yet"), err.join("\n"));
 });
