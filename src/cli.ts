@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 import { AnchorError, renderAnchorReport, resolveAnchors, writeAnchorUpdates } from "./anchor.js";
+import { AuditError, auditBundle, parseAnswers, renderAuditReport, type AnswerEntry } from "./audit.js";
 import { CACHE_DIRNAME, ensureSelfIgnoringDir, loadAnchorIndex } from "./anchors.js";
 import {
   BlameTargetError,
@@ -45,7 +46,7 @@ export function usage(): string {
     "",
     "Usage: why <command> [options]",
     "",
-    "Commands (unimplemented commands say so and exit 2):",
+    "Commands:",
     "  init     scaffold a .why/ bundle in the current repo",
     "  lint     check the bundle against the why schema (DESIGN.md §3)",
     "  blame    show the decision story behind a file or line range",
@@ -58,7 +59,7 @@ export function usage(): string {
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
     "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
-    "  --json              (blame, lint, doctor, dig) emit the results as JSON",
+    "  --json              (blame, lint, doctor, dig, audit) emit the results as JSON",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
     "  --episodes          (dig) extract commit episodes + tells from git history",
@@ -68,6 +69,8 @@ export function usage(): string {
     "  --evidence-dir <dir>  (dig) merge in local exported context (postmortems, chats)",
     "  --max-chars <n>     (dig) total size budget per evidence pack",
     "  --out <file|dir>    (dig) write the JSON report to a file (--episodes) or pack output dir (--evidence, default <bundle>/.cache/evidence)",
+    "  --questions-out <file>  (audit) export method:ask constraints as an agent questionnaire",
+    "  --answers <file>    (audit) apply a filled-in questionnaire; no-longer-true expires the constraint",
   ].join("\n");
 }
 
@@ -82,16 +85,6 @@ interface CommandContext {
 }
 
 type CommandHandler = (ctx: CommandContext) => Promise<number> | number;
-
-function notImplemented(cmd: Command): CommandHandler {
-  return ({ bundle, io }) => {
-    const loaded = bundle
-      ? ` — bundle at ${bundle.root} loaded: ${bundle.concepts.size} concepts, ${bundle.diagnostics.length} schema diagnostics`
-      : "";
-    io.err(`why ${cmd}: not implemented yet (see PLAN.md for the phase that delivers it)${loaded}`);
-    return 2;
-  };
-}
 
 interface CommandSpec {
   /** Flags parsed strictly: an unknown flag is a usage error. */
@@ -321,6 +314,50 @@ async function runDig({ values, positionals, bundle, cwd, io }: CommandContext):
   }
 }
 
+/**
+ * `why audit` — re-verify active constraints; expiry propagates downstream
+ * (DESIGN.md §5). Exit 1 when anything newly expired: the CI signal for
+ * "the archive learned something".
+ */
+async function runAudit({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why audit: takes no positional arguments — usage: why audit [--json] [--questions-out <file>] [--answers <file>]");
+    return 2;
+  }
+  try {
+    let answers: Map<string, AnswerEntry> | undefined;
+    if (values.answers !== undefined) {
+      const answersPath = resolve(cwd, values.answers as string);
+      let text: string;
+      try {
+        text = await readFile(answersPath, "utf8");
+      } catch {
+        io.err(`why audit: cannot read answers file ${answersPath}`);
+        return 1;
+      }
+      answers = parseAnswers(text);
+    }
+    const options: Parameters<typeof auditBundle>[1] = {};
+    if (answers !== undefined) options.answers = answers;
+    if (values["questions-out"] !== undefined) {
+      options.questionsOut = resolve(cwd, values["questions-out"] as string);
+    }
+    const report = await auditBundle(bundle!, options);
+    if (values.json === true) {
+      io.out(JSON.stringify(report, null, 2));
+    } else {
+      for (const line of renderAuditReport(report)) io.out(line);
+    }
+    return report.expired.length > 0 ? 1 : 0;
+  } catch (e) {
+    if (e instanceof AuditError) {
+      io.err(`why audit: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
 // `init` creates the bundle, so it takes no --bundle and skips discovery.
 const COMMAND_SPECS: Record<Command, CommandSpec> = {
   init: {
@@ -364,7 +401,16 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     needsBundle: true,
     run: runDig,
   },
-  audit: { options: BUNDLE_OPTIONS, needsBundle: true, run: notImplemented("audit") },
+  audit: {
+    options: {
+      ...BUNDLE_OPTIONS,
+      json: { type: "boolean" },
+      "questions-out": { type: "string" },
+      answers: { type: "string" },
+    },
+    needsBundle: true,
+    run: runAudit,
+  },
 };
 
 /** Exit codes: 0 ok, 1 operational error (e.g. no bundle), 2 usage/unimplemented. */
