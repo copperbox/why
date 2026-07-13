@@ -124,6 +124,15 @@ td.num { color: var(--dim); text-align: right; user-select: none; width: 3.5rem;
 td.git { color: var(--dim); width: 12rem; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 td.text { width: 100%; }
 
+/* Syntax highlighting (ui/highlight.js) — best-effort token classes over the
+ * code text; purely presentational, layered on top of the blame payload. */
+td.text .tok-kw { color: #c678dd; }
+td.text .tok-str { color: #98c379; }
+td.text .tok-com { color: var(--dim); font-style: italic; }
+td.text .tok-num { color: #d19a66; }
+td.text .tok-type { color: #e5c07b; }
+td.text .tok-fn { color: #61afef; }
+
 /* The why gutter stripe: color by confidence; scar tissue and questions
  * get their own loud treatments. */
 td.why {
