@@ -8,13 +8,15 @@
     "why": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "ui"
   ],
   "scripts": {
     "why": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:torture": "tsx --test test/torture/torture.test.ts",
+    "test:e2e": "tsx --test test/e2e/*.e2e.test.ts",
     "verify": "npm run typecheck && npm run test",
     "build": "tsc -p tsconfig.build.json",
     "sandcastle": "tsx .sandcastle/main.mts",
@@ -24,14 +26,17 @@
   },
   "devDependencies": {
     "@copperbox/sandcastle-workflow": "^0.4.2",
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.10.0",
     "ajv": "^8.20.0",
+    "jsdom": "^29.1.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "yaml": "^2.9.0"
   },
   "dependencies": {
     "@copperbox/okf-mcp": "^0.19.1",
+    "esbuild": "0.28.1",
     "tree-sitter-wasms": "0.1.13",
     "web-tree-sitter": "0.24.7"
   }

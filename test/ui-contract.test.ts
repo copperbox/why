@@ -30,6 +30,9 @@ function compile(schemaFile: string): ValidateFunction {
 const validateStory = compile("story.schema.json");
 const validateCoverage = compile("coverage.schema.json");
 const validateGraph = compile("graph.schema.json");
+const validateFiles = compile("files.schema.json");
+const validateGitBlame = compile("gitblame.schema.json");
+const validateDoctorSummary = compile("doctor.schema.json");
 
 function assertValid(validate: ValidateFunction, payload: unknown, label: string): void {
   assert.ok(
@@ -317,10 +320,17 @@ test("export --out writes the payload to a file", async () => {
 test("docs/ui-contract.md: exists, examples validate against their schemas, policy stated", () => {
   const doc = readFileSync(join(root, "docs/ui-contract.md"), "utf8");
   const examples = [...doc.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => JSON.parse(m[1]!));
-  assert.equal(examples.length, 3, "the doc must example all three schemas: story, coverage, graph");
+  assert.equal(
+    examples.length,
+    6,
+    "the doc must example all six schemas: story, coverage, graph, files, gitblame, doctor",
+  );
   assertValid(validateStory, examples[0], "doc story example");
   assertValid(validateCoverage, examples[1], "doc coverage example");
   assertValid(validateGraph, examples[2], "doc graph example");
+  assertValid(validateFiles, examples[3], "doc files example");
+  assertValid(validateGitBlame, examples[4], "doc gitblame example");
+  assertValid(validateDoctorSummary, examples[5], "doc doctor-summary example");
   for (const needle of [
     "schemaVersion",
     "Additive changes are minor",
@@ -332,6 +342,9 @@ test("docs/ui-contract.md: exists, examples validate against their schemas, poli
     "schemas/story.schema.json",
     "schemas/coverage.schema.json",
     "schemas/graph.schema.json",
+    "schemas/files.schema.json",
+    "schemas/gitblame.schema.json",
+    "schemas/doctor.schema.json",
   ]) {
     assert.ok(doc.includes(needle), `docs/ui-contract.md: missing "${needle}"`);
   }

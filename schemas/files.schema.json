@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copperbox/why/schemas/files.schema.json",
+  "title": "why files (serve)",
+  "description": "Payload of `why serve`'s GET /api/files: every tracked file at HEAD (`git ls-files`), ordered as git lists them, for the file-tree sidebar. docs/ui-contract.md annotates this schema.",
+  "schemaVersion": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "files": {
+      "description": "Repo-relative paths of tracked files.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

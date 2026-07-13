@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copperbox/why/schemas/doctor.schema.json",
+  "title": "why doctor summary (serve)",
+  "description": "Payload of `why serve`'s GET /api/doctor: the bundle health report summarized for header chips and a plain list view. Items are pre-rendered display strings — the same lines the `why doctor` CLI prints — so a renderer carries no health semantics. docs/ui-contract.md annotates this schema.",
+  "schemaVersion": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "healthy", "head", "concepts", "red", "yellow", "sections"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "healthy": {
+      "description": "No red findings — mirrors the CLI's exit-0 condition.",
+      "type": "boolean"
+    },
+    "head": {
+      "description": "Short sha the as_of checks ran against; null when there is no enclosing repo.",
+      "type": ["string", "null"]
+    },
+    "concepts": { "type": "integer", "minimum": 0 },
+    "red": { "type": "integer", "minimum": 0 },
+    "yellow": { "type": "integer", "minimum": 0 },
+    "sections": {
+      "description": "All seven doctor sections, in the CLI's render order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/section" }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "title", "severity", "count", "items"],
+      "properties": {
+        "key": {
+          "enum": [
+            "lostAnchors",
+            "staleAsOf",
+            "reviewByPastDue",
+            "unknownConstraints",
+            "expiredConstraints",
+            "openQuestions",
+            "lintErrors"
+          ]
+        },
+        "title": { "type": "string" },
+        "severity": { "enum": ["red", "yellow"] },
+        "count": { "type": "integer", "minimum": 0 },
+        "items": {
+          "description": "One pre-rendered display line per finding.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "skipped": {
+          "description": "Present only when the check could not run (e.g. as_of freshness outside a git repo) — say so, never silently zero.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
