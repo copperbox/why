@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { cp, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
@@ -17,7 +17,7 @@ import { JSDOM } from "jsdom";
 import { main } from "../src/cli.ts";
 import { buildUiAssets } from "../src/serve-assets.ts";
 import { startWhyServer, type RunningWhyServer } from "../src/serve.ts";
-import { capture, git, makeRepo, write } from "./helpers.ts";
+import { capture, git, makeHarborRepo } from "./helpers.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const HARBOR = join(root, "examples/harbor");
@@ -43,26 +43,7 @@ function assertValid(validate: ValidateFunction, payload: unknown, label: string
   );
 }
 
-/** A temp repo whose files match the harbor anchors, with harbor as its .why. */
-async function makeHarborRepo(): Promise<string> {
-  const repo = await makeRepo("why-serve-");
-  const body = (n: number) => Array.from({ length: n }, (_, i) => `// line ${i + 1}\n`).join("");
-  await write(repo, "src/lock.rs", body(80));
-  await write(repo, "src/dispatch/queue.rs", body(30));
-  await write(repo, "src/server/deadline.rs", body(20));
-  await write(repo, "config/defaults.toml", body(40));
-  // Copy the bundle without derived state (a local .cache/ from earlier CLI
-  // runs would make the no-cache-written assertion meaningless).
-  await cp(HARBOR, join(repo, ".why"), {
-    recursive: true,
-    filter: (src) => !src.includes(`${join(HARBOR, ".cache")}`),
-  });
-  git(repo, "add", ".");
-  git(repo, "commit", "-q", "-m", "files matching the harbor anchors");
-  return repo;
-}
-
-const repo = await makeHarborRepo();
+const repo = await makeHarborRepo("why-serve-");
 const running: RunningWhyServer = await startWhyServer(join(repo, ".why"));
 test.after(async () => {
   await running.close();

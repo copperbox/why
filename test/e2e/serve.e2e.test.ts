@@ -13,14 +13,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cp, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { startWhyServer } from "../../src/serve.ts";
-import { git, makeRepo, write } from "../helpers.ts";
-
-const root = fileURLToPath(new URL("../..", import.meta.url));
-const HARBOR = join(root, "examples/harbor");
+import { makeHarborRepo } from "../helpers.ts";
 
 // Resolved at runtime only: playwright is not a dependency (the default suite
 // must verify without a browser), so keep the specifier opaque to tsc.
@@ -31,18 +27,7 @@ test(
   "SPA in headless Chromium: blame gutter paints, story panel tells the lock.rs story",
   { skip: playwright === undefined ? "playwright not installed — npm install --no-save playwright && npx playwright install chromium" : false },
   async () => {
-    const repo = await makeRepo("why-e2e-");
-    const body = (n: number) => Array.from({ length: n }, (_, i) => `// line ${i + 1}\n`).join("");
-    await write(repo, "src/lock.rs", body(80));
-    await write(repo, "src/dispatch/queue.rs", body(30));
-    await write(repo, "src/server/deadline.rs", body(20));
-    await write(repo, "config/defaults.toml", body(40));
-    await cp(HARBOR, join(repo, ".why"), {
-      recursive: true,
-      filter: (src) => !src.includes(`${join(HARBOR, ".cache")}`),
-    });
-    git(repo, "add", ".");
-    git(repo, "commit", "-q", "-m", "files matching the harbor anchors");
+    const repo = await makeHarborRepo("why-e2e-");
 
     // Everything from here on must tear down on any failure — a leaked
     // server or browser keeps the test process alive past the failure.
