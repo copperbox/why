@@ -1,16 +1,17 @@
 ---
 type: decision
 title: Issues are the spec surface
-description: Each Phase 1–4 task is a self-contained issue with testable acceptance criteria; implementers and the gate judge against issue text.
-tags: [process, autobuild]
+description: Each Phase 1–4 task is a self-contained issue with testable
+  acceptance criteria; implementers and the gate judge against issue text.
+tags: [ process, autobuild ]
 timestamp: 2026-07-13
 why:
   status: active
   happened_on: 2026-07-11
   confidence: recorded
   anchors:
-    - path: AUTOBUILD.md
-      as_of: 9f0dc16
+    - path: .sandcastle/README.md
+      as_of: 44d4118
       state: live
 ---
 

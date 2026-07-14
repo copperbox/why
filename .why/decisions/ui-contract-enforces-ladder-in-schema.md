@@ -14,13 +14,11 @@ why:
   confidence: recorded
   anchors:
     - path: schemas/story.schema.json
-      lines: 1-185
       as_of: 58dc0db
       state: live
     - path: test/ui-contract.test.ts
-      lines: 1-351
-      as_of: 394ff31
-      state: lost
+      as_of: 44d4118
+      state: live
 ---
 
 `story.schema.json` encodes the DESIGN §2 hedging invariant as an `if`/`then`: a payload asserting `hedged: false` on a non-`question` hit below the corroboration threshold fails validation. The contract is checked by ajv (a dev-only dependency), and the schemas' own doc examples are validated in tests.

@@ -1,16 +1,17 @@
 ---
 type: decision
 title: Autonomous build via Sandcastle + gatekeeper
-description: Phases 1–4 are implemented by an issue→PR pipeline with an agent gatekeeper replacing the human merge gate.
-tags: [process, autobuild]
+description: Phases 1–4 are implemented by an issue→PR pipeline with an agent
+  gatekeeper replacing the human merge gate.
+tags: [ process, autobuild ]
 timestamp: 2026-07-13
 why:
   status: active
   happened_on: 2026-07-11
   confidence: recorded
   anchors:
-    - path: AUTOBUILD.md
-      as_of: 9f0dc16
+    - path: .sandcastle/README.md
+      as_of: 44d4118
       state: live
 ---
 
@@ -25,4 +26,4 @@ Recorded at project bootstrap [1]: remediation happens in the gate rather than t
 # Citations
 
 [1] [bootstrap commit 9f0dc16 — PLAN.md Decision log, 2026-07-11](https://github.com/copperbox/why/commit/9f0dc16ff06e3790eed67bfd62207e2839afb7b7)
-[2] [AUTOBUILD.md](https://github.com/copperbox/why/blob/main/AUTOBUILD.md)
+[2] [AUTOBUILD.md as of the bootstrap commit (now .sandcastle/README.md)](https://github.com/copperbox/why/blob/9f0dc16ff06e3790eed67bfd62207e2839afb7b7/AUTOBUILD.md)

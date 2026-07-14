@@ -156,6 +156,7 @@ on:
 
 jobs:
   capture:
+    if: github.event.pull_request.head.ref != 'why-drafts'
     runs-on: ubuntu-latest
     permissions:
       contents: write

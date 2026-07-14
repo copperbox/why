@@ -15,7 +15,6 @@ why:
   confidence: recorded
   anchors:
     - path: ui/highlight.js
-      lines: 1-202
       as_of: 9c434ae
       state: live
     - path: ui/app.js
