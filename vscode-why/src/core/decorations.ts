@@ -23,6 +23,28 @@ export type ThemeToken = (typeof TREATMENT_TOKENS)[keyof typeof TREATMENT_TOKENS
 
 export const ALL_TOKENS: readonly ThemeToken[] = [...new Set(Object.values(TREATMENT_TOKENS))];
 
+/** The `why.decorations.*` settings that gate painting. */
+export interface DecorationSettings {
+  /** Master toggle — the `why: Toggle Annotations` command flips this. */
+  enabled: boolean;
+  /** The number-column stripe. */
+  gutter: boolean;
+  /** The scrollbar / overview-ruler mark (off by default — the most intrusive). */
+  overviewRuler: boolean;
+}
+
+/**
+ * Which decoration lanes actually paint. The master `enabled` overrides both
+ * per-lane flags, so one toggle command silences everything regardless of the
+ * gutter/ruler preferences it will restore.
+ */
+export function visibleLanes(settings: DecorationSettings): { gutter: boolean; overviewRuler: boolean } {
+  return {
+    gutter: settings.enabled && settings.gutter,
+    overviewRuler: settings.enabled && settings.overviewRuler,
+  };
+}
+
 /** Spans covering a 1-based line; a span without `lines` is a whole-file
  * claim and covers every line (same rule as the serve SPA). */
 export function coveringSpans(spans: CoverageSpan[], line: number): CoverageSpan[] {

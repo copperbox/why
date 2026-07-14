@@ -10,7 +10,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { locateWhyCli, type CliLocation } from "./core/cli-locate.js";
 import { parseCoverage, parseStory, type Coverage, type CoverageSpan, type Story } from "./core/contract.js";
-import { ALL_TOKENS, coveringSpans, decorationRanges, type ThemeToken } from "./core/decorations.js";
+import { ALL_TOKENS, coveringSpans, decorationRanges, visibleLanes, type ThemeToken } from "./core/decorations.js";
 import { hoverMarkdown, stalenessNote } from "./core/hover.js";
 import { renderStoryHtml } from "./core/story-html.js";
 
@@ -41,7 +41,11 @@ function run(command: string, args: string[], cwd: string): Promise<string> {
 
 class WhyExtension implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly decorationTypes = new Map<ThemeToken, vscode.TextEditorDecorationType>();
+  // Two lanes per token so the gutter stripe and the overview-ruler (scrollbar)
+  // mark can be toggled independently — a single type carrying both can't hide
+  // one without the other.
+  private readonly gutterTypes = new Map<ThemeToken, vscode.TextEditorDecorationType>();
+  private readonly rulerTypes = new Map<ThemeToken, vscode.TextEditorDecorationType>();
   private readonly output = vscode.window.createOutputChannel("why");
   private readonly storyCache = new Map<string, Story>();
   private coverage: Coverage | undefined;
@@ -53,18 +57,35 @@ class WhyExtension implements vscode.Disposable {
     for (const token of ALL_TOKENS) {
       // A subtle gutter-side stripe per covered span; ThemeColor keeps every
       // color a theme token (issue 503: no hardcoded hex).
-      this.decorationTypes.set(
+      this.gutterTypes.set(
         token,
         vscode.window.createTextEditorDecorationType({
           isWholeLine: true,
           borderWidth: "0 0 0 2px",
           borderStyle: "solid",
           borderColor: new vscode.ThemeColor(token),
+        }),
+      );
+      // The matching scrollbar mark, painted on its own type so it can be hidden
+      // independently (it's off by default — the more intrusive of the two).
+      this.rulerTypes.set(
+        token,
+        vscode.window.createTextEditorDecorationType({
           overviewRulerColor: new vscode.ThemeColor(token),
           overviewRulerLane: vscode.OverviewRulerLane.Left,
         }),
       );
     }
+  }
+
+  /** Which decoration lanes to paint, per the `why.decorations.*` settings. */
+  private decorationLanes(): { gutter: boolean; overviewRuler: boolean } {
+    const cfg = vscode.workspace.getConfiguration("why");
+    return visibleLanes({
+      enabled: cfg.get<boolean>("decorations.enabled", true),
+      gutter: cfg.get<boolean>("decorations.gutter", true),
+      overviewRuler: cfg.get<boolean>("decorations.overviewRuler", false),
+    });
   }
 
   private locateCli(): CliLocation | undefined {
@@ -109,13 +130,27 @@ class WhyExtension implements vscode.Disposable {
 
   private paint(editor: vscode.TextEditor): void {
     const ranges = decorationRanges(this.spansFor(editor.document), editor.document.lineCount);
-    for (const [token, type] of this.decorationTypes) {
-      const lineRanges = ranges.get(token) ?? [];
-      editor.setDecorations(
-        type,
-        lineRanges.map((r) => new vscode.Range(r.start - 1, 0, r.end - 1, 0)),
-      );
+    const lanes = this.decorationLanes();
+    for (const token of ALL_TOKENS) {
+      const vsRanges = (ranges.get(token) ?? []).map((r) => new vscode.Range(r.start - 1, 0, r.end - 1, 0));
+      // A hidden lane is cleared, not skipped — otherwise a mark lingers after
+      // the setting is turned off.
+      editor.setDecorations(this.gutterTypes.get(token)!, lanes.gutter ? vsRanges : []);
+      editor.setDecorations(this.rulerTypes.get(token)!, lanes.overviewRuler ? vsRanges : []);
     }
+  }
+
+  /** Flip the master `why.decorations.enabled`, writing back to whichever scope
+   * already holds it (workspace if set there, else global). */
+  private async toggleAnnotations(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration("why");
+    const current = cfg.get<boolean>("decorations.enabled", true);
+    const target =
+      cfg.inspect<boolean>("decorations.enabled")?.workspaceValue !== undefined
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+    await cfg.update("decorations.enabled", !current, target);
+    // The onDidChangeConfiguration handler repaints.
   }
 
   async refresh(): Promise<void> {
@@ -198,6 +233,14 @@ class WhyExtension implements vscode.Disposable {
       this,
       vscode.commands.registerCommand("why.refresh", () => this.refresh()),
       vscode.commands.registerCommand("why.showStory", () => this.showStory()),
+      vscode.commands.registerCommand("why.toggleAnnotations", () => this.toggleAnnotations()),
+      // Repaint (no CLI re-run — coverage is cached) when the marks are toggled,
+      // whether from the command or the Settings UI.
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("why.decorations")) {
+          for (const editor of vscode.window.visibleTextEditors) this.paint(editor);
+        }
+      }),
       vscode.languages.registerHoverProvider({ scheme: "file" }, {
         provideHover: (document, position) => this.provideHover(document, position),
       }),
@@ -220,7 +263,8 @@ class WhyExtension implements vscode.Disposable {
 
   dispose(): void {
     if (this.refreshTimer !== undefined) clearTimeout(this.refreshTimer);
-    for (const type of this.decorationTypes.values()) type.dispose();
+    for (const type of this.gutterTypes.values()) type.dispose();
+    for (const type of this.rulerTypes.values()) type.dispose();
     this.output.dispose();
   }
 }

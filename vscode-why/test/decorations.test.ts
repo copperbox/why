@@ -12,6 +12,7 @@ import {
   coveringSpans,
   decorationRanges,
   TREATMENT_TOKENS,
+  visibleLanes,
 } from "../src/core/decorations.ts";
 
 const here = __dirname;
@@ -73,4 +74,29 @@ test("a span with no confidence falls back to the muted token", () => {
 
 test("no covering spans → no ranges at all", () => {
   assert.equal(decorationRanges([], 100).size, 0);
+});
+
+test("visibleLanes: defaults paint the gutter stripe only, scrollbar mark off", () => {
+  assert.deepEqual(
+    visibleLanes({ enabled: true, gutter: true, overviewRuler: false }),
+    { gutter: true, overviewRuler: false },
+  );
+});
+
+test("visibleLanes: the master toggle overrides both per-lane flags", () => {
+  assert.deepEqual(
+    visibleLanes({ enabled: false, gutter: true, overviewRuler: true }),
+    { gutter: false, overviewRuler: false },
+  );
+});
+
+test("visibleLanes: each lane can be shown on its own", () => {
+  assert.deepEqual(
+    visibleLanes({ enabled: true, gutter: false, overviewRuler: true }),
+    { gutter: false, overviewRuler: true },
+  );
+  assert.deepEqual(
+    visibleLanes({ enabled: true, gutter: true, overviewRuler: true }),
+    { gutter: true, overviewRuler: true },
+  );
 });
