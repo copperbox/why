@@ -14,9 +14,9 @@ why:
   confidence: recorded
   anchors:
     - path: src/cli.ts
-      lines: 639-654
       symbol: isDirectRun
-      as_of: 9c434ae
+      lines: 645-653
+      as_of: 518bf47
       state: live
     - path: test/cli.test.ts
       lines: 73-95

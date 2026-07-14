@@ -16,12 +16,12 @@ why:
   confidence: recorded
   anchors:
     - path: DESIGN.md
-      lines: "178"
+      lines: 178
       as_of: 58dc0db
-      state: live
+      state: lost
     - path: docs/ui-contract.md
-      lines: 1-276
-      as_of: 58dc0db
+      lines: 1-287
+      as_of: 518bf47
       state: live
     - path: schemas/story.schema.json
       lines: 1-185

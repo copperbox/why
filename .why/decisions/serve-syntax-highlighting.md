@@ -19,9 +19,9 @@ why:
       as_of: 9c434ae
       state: live
     - path: ui/app.js
-      lines: 144-175
       symbol: showFile
-      as_of: 9c434ae
+      lines: 132-179
+      as_of: 518bf47
       state: live
     - path: ui/style.css
       lines: 127-135
