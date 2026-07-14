@@ -18,8 +18,8 @@ why:
       as_of: 58dc0db
       state: live
     - path: test/ui-contract.test.ts
-      lines: 1-338
-      as_of: 58dc0db
+      lines: 1-351
+      as_of: 394ff31
       state: live
 ---
 

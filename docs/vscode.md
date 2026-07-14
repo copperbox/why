@@ -42,13 +42,33 @@ Either through the UI — Extensions view → `…` menu → *Install from VSIX�
 or from a terminal:
 
 ```
-code --install-extension vscode-why/vscode-why-0.1.0.vsix
+code --install-extension vscode-why/vscode-why-0.1.1.vsix
 ```
 
 The extension activates in any workspace containing a `.why/` directory. The
 `why` CLI is located in order: the workspace's `node_modules/.bin`, then PATH,
 then the `why.cliPath` setting. If none resolves you get one non-modal info
 message per session, then silence until the next session.
+
+## Settings and commands
+
+The inline coverage marks come in two lanes, toggled independently:
+
+| Setting | Default | What it controls |
+| --- | --- | --- |
+| `why.decorations.enabled` | `true` | Master toggle for both marks. Off hides everything; hovers and *Show Story* are unaffected. |
+| `why.decorations.gutter` | `true` | The stripe in the number column, per covered line. |
+| `why.decorations.overviewRuler` | `false` | The mark in the scrollbar overview ruler. Off by default — it stays visible even when scrolled away, which some find intrusive during regular editing. |
+| `why.cliPath` | `""` | Path to the `why` CLI, checked after `node_modules/.bin` and PATH. |
+
+Commands (palette, `why:` category):
+
+- **`why: Toggle Annotations`** — flips `why.decorations.enabled` for a
+  one-keystroke mute/unmute (bind it yourself in *Keyboard Shortcuts* if you
+  use it often). It writes to the workspace scope when the setting is already
+  set there, otherwise globally.
+- **`why: Show Story`** — the full card panel for the cursor's span.
+- **`why: Refresh`** — re-export coverage now (the escape hatch).
 
 ## Manual QA script
 
@@ -76,9 +96,14 @@ code "$QA"
 Then walk this checklist:
 
 1. **Activation + decorations.** Open `src/lock.rs`. Every line carries a
-   subtle colored stripe (the whole-file anchor of
+   subtle colored stripe in the number column (the whole-file anchor of
    `incidents/2024-03-lock-stall` covers the file); the colors come from your
-   theme, not fixed hex. The overview ruler shows the same marks.
+   theme, not fixed hex. The scrollbar overview ruler is **clear** by default;
+   set `why.decorations.overviewRuler` to `true` and the same marks appear
+   there too.
+1a. **Toggle.** Run `why: Toggle Annotations` from the palette: the gutter
+   stripes vanish. Run it again: they return. Confirm hovers still work while
+   the marks are hidden (step 2 with decorations off).
 2. **Hover on `src/lock.rs` line 47** (inside the 41–58 span of
    `decisions/queue-based-locking`). The card list shows, in order:
    - **first**, the expired-upstream warning: `⚠` glyph, *Acme 45s gateway
