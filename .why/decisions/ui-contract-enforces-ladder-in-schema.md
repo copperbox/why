@@ -20,7 +20,7 @@ why:
     - path: test/ui-contract.test.ts
       lines: 1-351
       as_of: 394ff31
-      state: live
+      state: lost
 ---
 
 `story.schema.json` encodes the DESIGN §2 hedging invariant as an `if`/`then`: a payload asserting `hedged: false` on a non-`question` hit below the corroboration threshold fails validation. The contract is checked by ajv (a dev-only dependency), and the schemas' own doc examples are validated in tests.
