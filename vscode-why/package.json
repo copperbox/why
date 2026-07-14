@@ -2,7 +2,7 @@
   "name": "vscode-why",
   "displayName": "why — decision archaeology",
   "description": "Inline why annotations, GitLens-style: gutter marks and hover cards from the repo's .why/ bundle, rendered from the why CLI's UI-contract payloads.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "copperbox",
   "license": "MIT",
   "private": true,
@@ -32,6 +32,11 @@
         "command": "why.refresh",
         "category": "why",
         "title": "Refresh"
+      },
+      {
+        "command": "why.toggleAnnotations",
+        "category": "why",
+        "title": "Toggle Annotations"
       }
     ],
     "menus": {
@@ -49,6 +54,21 @@
           "type": "string",
           "default": "",
           "description": "Path to the `why` CLI executable. Checked after the workspace's node_modules/.bin and PATH."
+        },
+        "why.decorations.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Master toggle for the inline coverage marks (the gutter stripe and scrollbar mark). Turning this off hides both, regardless of the per-lane settings below; hovers and `why: Show Story` are unaffected. Flip it quickly with the `why: Toggle Annotations` command."
+        },
+        "why.decorations.gutter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the coverage stripe in the number column for covered lines."
+        },
+        "why.decorations.overviewRuler": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the coverage mark in the scrollbar overview ruler. Off by default — it stays visible even when scrolled away, which some find intrusive during regular editing."
         }
       }
     }
