@@ -42,7 +42,7 @@ Either through the UI — Extensions view → `…` menu → *Install from VSIX�
 or from a terminal:
 
 ```
-code --install-extension vscode-why/vscode-why-0.1.0.vsix
+code --install-extension vscode-why/vscode-why-0.1.1.vsix
 ```
 
 The extension activates in any workspace containing a `.why/` directory. The

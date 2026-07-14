@@ -2,7 +2,7 @@
   "name": "vscode-why",
   "displayName": "why — decision archaeology",
   "description": "Inline why annotations, GitLens-style: gutter marks and hover cards from the repo's .why/ bundle, rendered from the why CLI's UI-contract payloads.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "copperbox",
   "license": "MIT",
   "private": true,
