@@ -1,6 +1,5 @@
-// Sandcastle configuration for the `why` autonomous build.
-// See AUTOBUILD.md for how this composes with the gatekeeper into a
-// zero-human-gate pipeline.
+// Sandcastle configuration for the optional agent pipeline.
+// See README.md in this directory for how this composes with the gatekeeper.
 
 import { defineConfig } from "@copperbox/sandcastle-workflow";
 
@@ -11,8 +10,9 @@ export default defineConfig({
   // npm-shaped repo: version-bump each feature PR.
   release: { enabled: true },
 
-  // Private repo, single trusted owner; the defaults are fine but explicit
-  // here because the gatekeeper relies on its own comments being trusted.
+  // Explicit because the gatekeeper relies on its own comments being trusted.
+  // These were chosen when the repo was private with a single trusted owner;
+  // the repo is now public, so only ever queue issues written by a maintainer.
   security: { trustedCommentsOnly: true, lockOnQueue: false },
 
   // The gatekeeper does its own remediation (it cannot route feedback through
@@ -23,8 +23,8 @@ export default defineConfig({
 
   implementNotes: [
     "DESIGN.md at the repo root is the source of truth for the `why` schema and",
-    "architecture; issues/ carries the per-task specs. Read the DESIGN.md sections an",
-    "issue cites before writing code. examples/harbor/ is the fixture bundle —",
+    "architecture; the issue body carries the per-task spec. Read the DESIGN.md",
+    "sections an issue cites before writing code. examples/harbor/ is the fixture bundle —",
     "tests should run against it rather than inventing new fixtures. Never let a",
     "code path emit a silently-wrong anchor, and never assert rationale above its",
     "evidence — these two rules override convenience every time.",

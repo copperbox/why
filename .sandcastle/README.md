@@ -1,19 +1,25 @@
-# AUTOBUILD — the zero-human pipeline
+# The Sandcastle pipeline
 
-How `why` gets built from concept to working software with no human gate. The
-division of labor:
+An optional issue→PR pipeline: labelled GitHub issues become implemented,
+reviewed, merged PRs, with an agent gatekeeper standing in for the human merge
+gate. It built the initial `why` codebase (phases 1–4, issues #1–#22) and is
+kept here for bulk work that suits it — a batch of well-specified,
+independent tasks. Day-to-day development does not use it; see
+[CONTRIBUTING.md](../CONTRIBUTING.md) for the normal workflow.
+
+Nothing in the shipped product depends on this directory. It is repo tooling.
 
 | Role | Who | Where |
 |---|---|---|
-| Product/architecture | Claude (chat sessions with Dan) | README.md, DESIGN.md, HOWTO.md |
-| Issue authoring | Claude | [issues/](issues/) — filed by the bootstrap script |
+| Product/architecture | Chat sessions | README.md, DESIGN.md, HOWTO.md |
+| Issue authoring | Chat sessions | GitHub issues, labelled `Sandcastle` |
 | Planning, implementation, internal review, PR assembly | Sandcastle agents (Docker-sandboxed) | `@copperbox/sandcastle-workflow` |
-| **Final review, remediation, merge, escalation** | **Gatekeeper agent** | [.sandcastle/gatekeeper.mts](.sandcastle/gatekeeper.mts) |
+| **Final review, remediation, merge, escalation** | **Gatekeeper agent** | [gatekeeper.mts](gatekeeper.mts) |
 | Phase sequencing | Gatekeeper (promotion) | `phase:N` labels |
 
 ## The loop
 
-`npm run sandcastle:auto` ([scripts/autonomous-loop.sh](scripts/autonomous-loop.sh)) alternates two runs forever:
+`npm run sandcastle:auto` ([scripts/autonomous-loop.sh](../scripts/autonomous-loop.sh)) alternates two runs forever:
 
 ```
            ┌──────────────────────────────────────────────────────────┐
@@ -42,9 +48,9 @@ division of labor:
            → nothing left anywhere → exit 4: DONE
 ```
 
-Phase 1 issues are filed pre-queued; phases 2–4 sit as labeled backlog until
-everything before them has merged, so the dependency order across phases is
-enforced by the ratchet, not by hope.
+Issues carrying a `phase:N` label sit as backlog until everything in earlier
+phases has merged, so dependency order across a batch is enforced by the
+ratchet rather than by hope. A batch with no `phase:N` labels just drains.
 
 ## Design decisions (and their whys — this file eats its own dog food)
 
@@ -96,8 +102,8 @@ enforced by the ratchet, not by hope.
   issues), invariants that are checkable rather than aspirational
   (CODING_STANDARDS.md), a verify the agent can't overrule, and a
   merge-is-expensive prompt stance. It is still one model family grading its
-  own homework; the Phase 2 torture test and Phase 3 hand-grading exist
-  precisely to audit the gate's judgment after the fact.
+  own homework — which is why the pipeline is reserved for well-specified
+  batch work and not the default path for changes to this repo.
 - **Cost.** Every issue is multiple agent runs (plan, implement, review,
   merge, gate, possibly fix rounds). The per-phase ratchet caps the blast
   radius of a bad stretch; `GATE_MAX_ROUNDS` caps per-PR spend.
@@ -110,17 +116,21 @@ enforced by the ratchet, not by hope.
 - **Host-side gate agents.** Build agents run in Docker; gate agents run on
   the host with tool allowlists (read/git-read/npm for review; +edit/commit
   for fix, push done by the script). Tighter than the build side's sandbox?
-  No — narrower tools, weaker walls. Acceptable for a private repo of our own
-  generated code; revisit before pointing this at anything public.
+  No — narrower tools, weaker walls. **This was scoped to a private repo of
+  our own generated code. The repo is now public, so issue text is
+  attacker-controllable input that reaches a host-side agent: never point the
+  loop at issues you did not write.** Contributor PRs go through the normal
+  human review in [CONTRIBUTING.md](../CONTRIBUTING.md), never through this
+  gate.
 
 ## Runbook
 
 ```bash
 # once
 cp .sandcastle/.env.example .sandcastle/.env   # fill in both tokens
-scripts/bootstrap-github.sh                    # repo + labels + issue backlog + image
+npx sandcastle docker build-image              # build agents' sandbox image
 
-# the whole build
+# per batch: file the issues, label them "Sandcastle", then
 npm run sandcastle:auto
 
 # pieces, when wanted

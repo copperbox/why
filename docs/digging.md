@@ -37,11 +37,6 @@ histories — and flags *tells*: reverts, fix-after-fix chains, sudden churn on
 long-quiet files, comment tells (`HACK`, `workaround`, `for now`, …). Tells
 mark high-value dig sites; use them to order step 3.
 
-(This subcommand is specified by `issues/301-dig-episodes.md`, earlier in
-Phase 3 than the skills. If your build predates it, write the episodes JSON
-by hand — `docs/dig-evidence.md` documents the tolerant shape step 2
-accepts.)
-
 ### 2. Assemble evidence packs
 
 ```bash

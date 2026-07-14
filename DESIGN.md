@@ -182,7 +182,7 @@ Same data over MCP: agents mount the bundle via okf-mcp and get story-of-this-co
 
 ## Open problems
 
-Tracked honestly; the build's phased issues in [issues/](issues/) each retired or narrowed one.
+Tracked honestly. These are the questions v1 does not settle.
 
 1. **Anchor drift under heavy refactoring.** Symbol + blame-trace should survive renames and moves; wholesale rewrites (v1 → v2 of a subsystem) are genuinely new code — is `lost` + re-dig the right answer, or should decisions carry forward through a human-confirmed "successor anchor"? *Phase 2 decides with real data.*
 2. **Hallucination pressure at scale.** One agent per episode with citation requirements is the design; does it hold when episodes are thin (terse commit messages, no PRs)? May need an adversarial verify pass — a second agent trying to refute each ≥`inferred` claim. *Phase 3 measures on a real repo before adding cost.*

@@ -103,11 +103,11 @@ npx -y @copperbox/okf-mcp --bundle why=.why inspect
 
 ## Getting started
 
-`why` is built and functional: all ten subcommands ship, the three CI recipes
-run on this repo's own `.why/` bundle, and both viewers (`why serve` and the
-VS Code extension) render live. **[HOWTO.md](HOWTO.md) is the adoption guide** —
-scaffold a bundle, cold-start a dig, wire up the PR gate / weekly audit /
-post-merge capture jobs, and the team habits that make it pay off.
+All ten subcommands ship, the three CI recipes run on this repo's own `.why/`
+bundle, and both viewers (`why serve` and the VS Code extension) render live.
+**[HOWTO.md](HOWTO.md) is the adoption guide** — scaffold a bundle, cold-start
+a dig, wire up the PR gate / weekly audit / post-merge capture jobs, and the
+team habits that make it pay off.
 
 ```bash
 npx -y @copperbox/why init --capture-snippet   # scaffold .why/ + teach CLAUDE.md
@@ -125,6 +125,7 @@ and each operational recipe has a page under [`docs/`](docs).
 |---|---|
 | [HOWTO.md](HOWTO.md) | Adoption guide — get a team running `why` on any repo |
 | [DESIGN.md](DESIGN.md) | Full schema and architecture spec — the source of truth |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, the invariants, and how to send a PR |
 | [CLAUDE.md](CLAUDE.md) | Orientation for agent sessions in this repo |
 | [examples/harbor/](examples/harbor/) | A hand-authored example bundle for a fictional service — the schema, fully realized in six concepts |
 | [.why/](.why/index.md) | This repo's own decision archive — the self-hosted bundle, kept honest by the CI recipes in [docs/ci.md](docs/ci.md) |
