@@ -87,6 +87,14 @@ frontmatter-only result back. Because it runs with `main` checked out, every
 the squashed branch, which has no earlier commit to point at and is the one
 case a contributor could never have anchored correctly.
 
+That includes repairs. An anchor whose `as_of` the squash orphaned but whose
+claim still verifies at HEAD — a whole-file path that is present, a symbol
+re-found at its recorded span — is re-stamped to the landed commit, so the
+`stale as_of` findings a squash leaves behind clear on the next merge. The one
+exception is a bare `path + lines` claim: with no symbol to re-find and no
+readable history to trace from, nothing can verify the lines, and `why`
+reports `unverified as_of` rather than guess (DESIGN.md §4).
+
 It PRs back rather than pushing, so branch protection stays on and the diff is
 reviewable. Squashing *this* PR is harmless: the `as_of` values inside the
 files name `main` commits, and content survives a squash unchanged. The job is

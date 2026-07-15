@@ -171,7 +171,12 @@ Triggers on every push to `main`, re-resolves every anchor against the commit
 that actually landed, and PRs the frontmatter-only result back. Running from
 `main` is what makes every `as_of` durable — including for a file *born* on the
 squashed branch, which has no earlier commit to point at and which a
-contributor could never have anchored correctly.
+contributor could never have anchored correctly. It also repairs the orphans a
+squash leaves behind: an `as_of` naming a discarded branch commit is re-stamped
+to the landed commit whenever the claim re-verifies at HEAD without it (a
+present whole-file path, a re-found symbol). A bare `path + lines` claim is the
+exception — nothing can verify the lines without readable history, so it stays
+`unverified as_of` rather than guessed at (DESIGN.md §4).
 
 It PRs back rather than pushing, so branch protection stays on. Squashing that
 PR is harmless: the `as_of` values inside name `main` commits, and content

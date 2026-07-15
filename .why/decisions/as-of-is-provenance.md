@@ -1,9 +1,10 @@
 ---
 type: decision
 title: as_of is provenance, so doctor does not flag clean-ancestor anchors
-description: A live anchor whose as_of is a clean ancestor of HEAD is stable, not stale; why doctor only flags unresolved or diverged as_ofs.
-tags: [anchoring, doctor]
-timestamp: 2026-07-13
+description: A live anchor whose as_of is a clean ancestor of HEAD is stable,
+  not stale; why doctor only flags unresolved or diverged as_ofs.
+tags: [ anchoring, doctor ]
+timestamp: 2026-07-15
 why:
   status: active
   happened_on: 2026-07-13
@@ -20,6 +21,16 @@ why:
 a commit unrelated to HEAD (diverged/rebased history) or one the repository
 cannot resolve at all. A live anchor whose `as_of` is a clean ancestor of HEAD
 is left alone — it is healthy provenance, not a problem.
+
+**Scope, amended 2026-07-15:** the rule protects a *readable* `as_of` — a
+clean ancestor, which is evidence the span survived unchanged since that
+commit. An `as_of` that is a non-ancestor (or does not resolve) carries no
+such meaning, and "never re-stamp a stable anchor" does not extend to it:
+`why anchor` repairs such an orphan when the claim re-verifies at HEAD without
+reading `as_of` — see
+[orphaned as_of is repaired](/decisions/orphaned-as-of-is-repaired.md). That
+repair is what makes the `not-ancestor` finding this decision kept genuinely
+actionable.
 
 # Why
 

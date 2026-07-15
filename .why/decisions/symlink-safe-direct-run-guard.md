@@ -1,6 +1,6 @@
 ---
 type: decision
-title: The CLI direct-run guard resolves argv[1]'s symlinks before comparing
+title: The CLI direct-run guard resolves the entry path's symlinks before comparing
 description: isDirectRun realpath-resolves the entry path and builds its URL
   with pathToFileURL, so a symlinked launch (npm bins, the VS Code extension)
   still runs main().

@@ -7,7 +7,7 @@ description: why anchor gates every read of history through as_of on ancestry,
 tags:
   - anchoring
   - doctor
-timestamp: 2026-07-14
+timestamp: 2026-07-15
 why:
   status: active
   happened_on: 2026-07-14
@@ -50,7 +50,7 @@ Two findings forced this design, both measured rather than reasoned:
 
 **Why `unverified` rather than `lost`.** Path and symbol resolution are stronger evidence about where code lives than `as_of` ever was. Downgrading a live, path-confirmed anchor to `lost` because its provenance is unreadable asserts *below* the evidence — the mirror of the sin the ladder forbids — and false `lost` is how a health report gets ignored, which is the product.
 
-Migration: eleven anchors carried a non-ancestor `as_of`. Eight were re-stamped to `0f75578` only after verifying the claim there (path present, or the line span byte-identical to HEAD). Three anchoring `.sandcastle/README.md` were left at `44d4118`: that file was born on `release-prep`, so no surviving commit contains it and there is no honest `as_of` to move them to. They will read `unverified` after this branch merges, which is the true statement about their history. [as_of is provenance](/decisions/as-of-is-provenance.md) still holds — a stable anchor is never re-stamped — so those findings clear only when the anchors next move.
+Migration: eleven anchors carried a non-ancestor `as_of`. Eight were re-stamped to `0f75578` only after verifying the claim there (path present, or the line span byte-identical to HEAD). Three anchoring `.sandcastle/README.md` were left at `44d4118`: that file was born on `release-prep`, so no surviving commit contained it at the time and there was no honest `as_of` to move them to. Leaving them was sound; leaving them *permanently* was not — after the squash they would flag `not-ancestor` yellow with nothing able to clear it (a whole-file anchor resolves by path at HEAD and never consults `as_of`, so re-anchoring walks past it). [orphaned as_of is repaired](/decisions/orphaned-as-of-is-repaired.md) closes that gap: the post-merge run on `main` re-stamps them to the squash commit, which does contain the file. [as_of is provenance](/decisions/as-of-is-provenance.md) still holds for what it protects — a stable anchor's clean-ancestor `as_of` is never re-stamped.
 
 # Citations
 

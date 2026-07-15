@@ -655,6 +655,232 @@ test("as_of falls back to HEAD when the span cannot be verified at the merge-bas
   assert.notEqual(anchor.as_of, mainTip);
 });
 
+/**
+ * Two byte-identical blocks. The anchor claims the second; deleting the first
+ * shifts it onto the line numbers the first used to occupy — so the text at the
+ * merge-base matches the text at HEAD while naming entirely different code.
+ */
+const clientDeadlineDecision = (asOf: string) => `---
+type: decision
+title: 47s client deadline
+description: The client deadline is pinned 2s past the gateway cap.
+timestamp: 2026-07-11
+why:
+  status: active
+  happened_on: 2024-01-15
+  confidence: corroborated
+  anchors:
+    - path: config/defaults.toml
+      lines: 5-6
+      as_of: "${asOf}"
+      state: live
+---
+
+# 47s client deadline
+
+47 = 45 + 2, so the gateway timeout always fires first.
+`;
+
+const DUPLICATE_BLOCKS = `[server]
+request_deadline = 47
+retry_jitter = false
+[client]
+request_deadline = 47
+retry_jitter = false
+`;
+const CLIENT_BLOCK_ONLY = `[client]
+request_deadline = 47
+retry_jitter = false
+`;
+
+test("a merge-base whose text merely matches is not a verified span", async () => {
+  const repo = await makeRepo("why-stamp-dup-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DUPLICATE_BLOCKS);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const mainTip = git(repo, "rev-parse", "--short", "HEAD");
+  withIntegrationBranch(repo);
+
+  // Drop [server], so the anchored [client] block slides from 5-6 up to 2-3 —
+  // where [server] used to sit, with identical text. Byte-comparing the span at
+  // the merge-base therefore says "holds" about the wrong block entirely.
+  git(repo, "checkout", "-q", "-b", "feature");
+  await write(repo, "config/defaults.toml", CLIENT_BLOCK_ONLY);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "drop the server block");
+  const featureTip = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/47s-request-deadline.md", clientDeadlineDecision(mainTip));
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+
+  const first = await anchorOf(whyRoot, "decisions/47s-request-deadline");
+  assert.equal(first.lines, "2-3", "the [client] block moved up");
+  assert.equal(first.as_of, featureTip, "identical text at the merge-base is not the same code");
+  assert.notEqual(first.as_of, mainTip, "stamping it would name [server], which this is not about");
+
+  // The real cost of a false stamp: the next run traces from the deleted
+  // [server] block, finds nothing, and buries an anchor whose code is untouched.
+  const { io: io2, out: out2 } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io2), 0, out2.join("\n"));
+
+  const second = await anchorOf(whyRoot, "decisions/47s-request-deadline");
+  assert.equal(second.state, "live", "a second run must not lose an anchor whose code is present");
+  assert.equal(second.lines, "2-3", "re-anchoring is idempotent");
+  assert.equal(second.as_of, first.as_of, "and the stamp is one the next run re-derives");
+});
+
+// --- Repairing an orphaned as_of ------------------------------------------
+
+/** The symbol resolves at HEAD to exactly the recorded span, so the claim is
+ * current — the orphaned as_of is the only thing wrong with the anchor. */
+const repairSymbolConcept = (asOf: string) => `---
+type: decision
+title: 47s request deadline
+description: Server-side deadline pinned 2s past the gateway cap.
+timestamp: 2026-07-11
+why:
+  status: active
+  happened_on: 2024-01-15
+  confidence: corroborated
+  anchors:
+    - path: config/defaults.toml
+      symbol: request_deadline
+      lines: 4
+      as_of: "${asOf}"
+      state: live
+---
+
+# 47s request deadline
+
+47 = 45 + 2, so the gateway timeout always fires first.
+`;
+
+test("an orphaned as_of is repaired when the claim re-verifies on the integration branch", async () => {
+  const repo = await makeRepo("why-repair-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+
+  // The branch births a file; the squash then discards the only commit the
+  // anchors' as_of ever named.
+  git(repo, "checkout", "-q", "-b", "feature");
+  await write(repo, "docs/notes.md", "# born on the branch\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "add notes");
+  const orphan = git(repo, "rev-parse", "--short", "HEAD");
+
+  git(repo, "checkout", "-q", "main");
+  git(repo, "merge", "--squash", "-q", "feature");
+  git(repo, "commit", "-qm", "squash of feature (#1)");
+  const squash = git(repo, "rev-parse", "--short", "HEAD");
+  withIntegrationBranch(repo); // HEAD is contained in origin/HEAD, so HEAD is durable
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/born-on-branch.md", wholeFileConcept("docs/notes.md", orphan));
+  await write(repo, ".why/decisions/47s-request-deadline.md", repairSymbolConcept(orphan));
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+  assert.ok(out.join("\n").includes("repaired as_of"), out.join("\n"));
+
+  const wholeFile = await anchorOf(whyRoot, "decisions/born-on-branch");
+  assert.equal(wholeFile.as_of, squash, "the squash is the surviving commit that contains the file");
+  assert.equal(wholeFile.path, "docs/notes.md");
+  assert.equal(wholeFile.state, "live");
+
+  const symbol = await anchorOf(whyRoot, "decisions/47s-request-deadline");
+  assert.equal(symbol.as_of, squash, "a re-found symbol verifies the claim without reading as_of");
+  assert.equal(symbol.lines, "4", "the span itself did not move");
+
+  // Idempotent: a stamp repair writes is one the next run re-derives and keeps.
+  const second = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, second.io), 0, second.out.join("\n"));
+  assert.ok(second.out.join("\n").includes("2 already current"), second.out.join("\n"));
+  assert.equal((await anchorOf(whyRoot, "decisions/born-on-branch")).as_of, squash);
+});
+
+test("repair declines on a diverged branch when the span cannot be verified at the merge-base", async () => {
+  const repo = await makeRepo("why-repair-branch-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  withIntegrationBranch(repo);
+
+  // An orphan: the tip of a branch main never merged.
+  git(repo, "checkout", "-q", "-b", "elsewhere");
+  await write(repo, "scratch.txt", "gone tomorrow\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "never merged");
+  const orphan = git(repo, "rev-parse", "--short", "HEAD");
+
+  // The anchored file is born on *this* branch, so the merge-base cannot
+  // verify it — the only available stamp is a branch HEAD the coming squash
+  // discards, which would merely recreate the orphan. Repair must decline.
+  git(repo, "checkout", "-q", "main");
+  git(repo, "checkout", "-q", "-b", "feature");
+  await write(repo, "docs/notes.md", "# born on the branch\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "add notes");
+  const featureTip = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/born-on-branch.md", wholeFileConcept("docs/notes.md", orphan));
+  const before = await readFile(join(whyRoot, "decisions/born-on-branch.md"), "utf8");
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+  assert.ok(out.join("\n").includes("already current"), out.join("\n"));
+
+  assert.equal(
+    await readFile(join(whyRoot, "decisions/born-on-branch.md"), "utf8"),
+    before,
+    "no branch-side churn: an undurable repair writes nothing",
+  );
+  const anchor = await anchorOf(whyRoot, "decisions/born-on-branch");
+  assert.equal(anchor.as_of, orphan, "left for the post-merge run on the integration branch");
+  assert.notEqual(anchor.as_of, featureTip);
+});
+
+test("on a diverged branch, repair stamps the merge-base when the span holds there", async () => {
+  const repo = await makeRepo("why-repair-base-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  await write(repo, "docs/notes.md", "# on main since the start\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const mainTip = git(repo, "rev-parse", "--short", "HEAD");
+  withIntegrationBranch(repo);
+
+  git(repo, "checkout", "-q", "-b", "elsewhere");
+  await write(repo, "scratch.txt", "gone tomorrow\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "never merged");
+  const orphan = git(repo, "rev-parse", "--short", "HEAD");
+
+  git(repo, "checkout", "-q", "main");
+  git(repo, "checkout", "-q", "-b", "feature");
+  await write(repo, "README.md", "# unrelated\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "unrelated work");
+  const featureTip = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/born-on-main.md", wholeFileConcept("docs/notes.md", orphan));
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+
+  const anchor = await anchorOf(whyRoot, "decisions/born-on-main");
+  assert.equal(anchor.as_of, mainTip, "the merge-base survives the squash and verifiably has the file");
+  assert.notEqual(anchor.as_of, featureTip, "a branch HEAD stamp would re-orphan at the squash");
+});
+
 test("on the integration branch itself, as_of is stamped at HEAD", async () => {
   const repo = await makeRepo("why-stamp-main-");
   git(repo, "checkout", "-q", "-b", "main");

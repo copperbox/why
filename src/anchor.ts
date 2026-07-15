@@ -5,11 +5,13 @@
 // honestly `lost`. Nothing here may emit a plausible-but-unverified span: no
 // failure mode falls through to a guess.
 //
-// Reading history through `as_of` is gated on ancestry (`historyOrigin`), and
+// Reading history through `as_of` is gated on ancestry (`historyOrigin`),
 // writing `as_of` prefers the newest *surviving* commit but only where the
-// span verifiably holds (`stampFor`). Both exist because a squash merge
-// discards the branch commit an anchor was verified at — see DESIGN.md §4
-// "as_of and squash merges".
+// span verifiably holds (`stampFor`), and an orphaned `as_of` on a claim that
+// re-verifies at HEAD without it is repaired to a durable commit
+// (`repairOrphan`). All three exist because a squash merge discards the branch
+// commit an anchor was verified at — see DESIGN.md §4 "as_of and squash
+// merges".
 //
 // Writes go through okf-mcp's updateConcept so only the `why.anchors` entries
 // change — narrative bodies and every other frontmatter key (timestamp
@@ -431,7 +433,7 @@ async function findSymbolAtHead(
 
 // --- Classification and the report ---------------------------------------
 
-export type AnchorOutcome = "current" | "resolved" | "moved" | "unverified" | "lost";
+export type AnchorOutcome = "current" | "resolved" | "moved" | "repaired" | "unverified" | "lost";
 
 /**
  * The commit to record as `as_of` for a re-anchored claim.
@@ -458,25 +460,74 @@ async function stampFor(git: GitView, span: ResolvedSpan): Promise<string> {
   return (await spanHoldsAt(git, base, span)) ? await git.shortSha(base) : git.headShort;
 }
 
-/** Whether `span` names the same code at `rev` that it names at HEAD. */
+/**
+ * Whether `span` names the same code at `rev` that it names at HEAD.
+ *
+ * The question is identity, not resemblance. Comparing the text at those line
+ * numbers answers the wrong one: a span this branch shifted can land on numbers
+ * that coincidentally held byte-identical text at `rev` — a duplicated config
+ * block, boilerplate, a repeated import — and stamping `rev` then re-points the
+ * anchor at that other code. So ask git, with the same reverse blame the
+ * resolver uses: an `as_of` is honest exactly when re-resolving from it
+ * reproduces this span. That equivalence is also what keeps `why anchor`
+ * idempotent — a stamp it writes is one the next run re-derives, rather than
+ * one the next run re-traces to the wrong code and calls `lost`.
+ *
+ * A whole-file anchor claims its path, so the path existing at `rev` is the
+ * whole claim; there is no span to re-derive.
+ */
 async function spanHoldsAt(git: GitView, rev: string, span: ResolvedSpan): Promise<boolean> {
   const there = await git.fileAt(rev, span.path);
   if (there === undefined) return false;
-  // A whole-file anchor claims the path, so the path existing is the claim.
   if (span.lines === undefined) return true;
-  const here = await git.fileAtHead(span.path);
-  if (here === undefined) return false;
-  const thereText = sliceLines(there, span.lines);
-  const hereText = sliceLines(here, span.lines);
-  // Two overruns both read undefined — never let that compare equal.
-  return thereText !== undefined && thereText === hereText;
+  const traced = await git.traceLines(span.path, span.lines, rev);
+  return (
+    traced !== undefined &&
+    traced.path === span.path &&
+    traced.lines.start === span.lines.start &&
+    traced.lines.end === span.lines.end
+  );
 }
 
-/** The 1-based inclusive line slice, or undefined when the range overruns. */
-function sliceLines(content: string, range: LineRange): string | undefined {
-  const lines = content.split("\n");
-  if (range.end > lines.length) return undefined;
-  return lines.slice(range.start - 1, range.end).join("\n");
+/**
+ * The repaired result for an otherwise-current anchor whose recorded `as_of`
+ * is orphaned, or undefined when there is nothing to repair — or nothing
+ * durable to repair it with.
+ *
+ * A readable `as_of` — a clean ancestor of HEAD — is provenance: it means the
+ * span survived unchanged since that commit, and it is never rewritten
+ * (.why/decisions/as-of-is-provenance.md). An orphaned `as_of` means nothing:
+ * no clone of the integration branch resolves it (typically a squash merge
+ * discarded the branch commit it names), and because the anchor still resolves
+ * cleanly, no re-anchoring would ever touch it — the one `why doctor` finding
+ * nothing could clear. Repair is honest exactly because a claim that reaches
+ * the `current` classification with an unusable origin was verified at HEAD
+ * without reading `as_of` at all: the path exists, or the symbol was re-found.
+ * (A bare line claim with an unusable origin is `unverified` and never gets
+ * here — re-stamping it would assert lines nothing verified.)
+ *
+ * The stamp must be durable, or the next squash recreates the orphan. Where
+ * `survivingBase` is undefined — HEAD is on the integration branch, or git
+ * records no integration branch and HEAD is all there is — HEAD is that stamp.
+ * On a branch that has diverged from the integration branch it is the
+ * merge-base, and only when the span verifiably holds there; otherwise repair
+ * declines and leaves the orphan to the post-merge run on the integration
+ * branch, rather than write a branch HEAD the squash will discard and
+ * re-orphan.
+ */
+async function repairOrphan(
+  git: GitView,
+  anchor: Anchor,
+  span: ResolvedSpan,
+): Promise<Omit<AnchorResult, "conceptId" | "index"> | undefined> {
+  if (anchor.as_of === undefined) return undefined; // nothing recorded, nothing to repair
+  if ((await git.historyOrigin(anchor.as_of)) !== undefined) return undefined; // readable provenance — keep it
+  const base = await git.survivingBase();
+  if (base !== undefined && !(await spanHoldsAt(git, base, span))) return undefined;
+  // Everything but the unreadable as_of was confirmed at HEAD, so everything
+  // but as_of is kept exactly as written.
+  const after: Anchor = { ...anchor, as_of: base === undefined ? git.headShort : await git.shortSha(base) };
+  return { before: anchor, after, outcome: "repaired", changed: true, recovered: false };
 }
 
 export interface AnchorResult {
@@ -531,7 +582,15 @@ async function classify(
   const span = claim.span;
   const wasLive = (anchor.state ?? "live") === "live";
   if (span.path === normalizePath(anchor.path) && sameLines(anchor.lines, span.lines) && wasLive) {
-    return { before: anchor, after: anchor, outcome: "current", changed: false, recovered: false };
+    return (
+      (await repairOrphan(git, anchor, span)) ?? {
+        before: anchor,
+        after: anchor,
+        outcome: "current",
+        changed: false,
+        recovered: false,
+      }
+    );
   }
   const after: Anchor = { path: span.path };
   if (anchor.symbol !== undefined) after.symbol = anchor.symbol;
@@ -644,6 +703,8 @@ function detailFor(result: AnchorResult): string {
       return `${anchorSpan(result.before)} (last known${result.before.as_of === undefined ? "" : `, as_of ${result.before.as_of}`})`;
     case "unverified":
       return `${anchorSpan(result.before)} (path live; as_of ${result.before.as_of ?? "unset"} is not an ancestor of HEAD)`;
+    case "repaired":
+      return `${anchorSpan(result.before)} (orphaned as_of ${result.before.as_of} → ${result.after.as_of})`;
     default:
       return `${anchorSpan(result.before)} → ${anchorSpan(result.after)}`;
   }
@@ -653,6 +714,7 @@ const OUTCOME_LABELS: Record<AnchorOutcome, string> = {
   current: "already current",
   resolved: "resolved",
   moved: "moved",
+  repaired: "repaired as_of",
   unverified: "unverified as_of",
   lost: "lost",
 };
@@ -662,7 +724,7 @@ export function renderAnchorReport(
   mode: { check: boolean; written: string[]; allowDrift?: boolean },
 ): string[] {
   const lines: string[] = [];
-  const counts: Record<AnchorOutcome, number> = { current: 0, resolved: 0, moved: 0, unverified: 0, lost: 0 };
+  const counts: Record<AnchorOutcome, number> = { current: 0, resolved: 0, moved: 0, repaired: 0, unverified: 0, lost: 0 };
   for (const result of report.results) counts[result.outcome]++;
 
   const total = report.results.length;
@@ -675,15 +737,13 @@ export function renderAnchorReport(
       lines.push(`  ${label.padEnd(21)} ${result.conceptId.padEnd(idWidth)}  ${detailFor(result)}`);
     }
     lines.push("");
-    const tally = [
-      `${counts.moved} moved`,
-      `${counts.resolved} resolved`,
-      `${counts.lost} lost`,
-      `${counts.current} already current`,
-    ];
-    // Only surfaced when non-zero: an unverified as_of is rare and worth
-    // reading, and a permanent `0 unverified` would train the eye past it.
-    if (counts.unverified > 0) tally.splice(3, 0, `${counts.unverified} unverified as_of`);
+    // Repaired and unverified surface only when non-zero: both are rare and
+    // worth reading, and a permanent `0` would train the eye past them.
+    const tally = [`${counts.moved} moved`, `${counts.resolved} resolved`];
+    if (counts.repaired > 0) tally.push(`${counts.repaired} repaired as_of`);
+    tally.push(`${counts.lost} lost`);
+    if (counts.unverified > 0) tally.push(`${counts.unverified} unverified as_of`);
+    tally.push(`${counts.current} already current`);
     lines.push(tally.join(" · "));
   }
   for (const conceptId of report.skipped) {
