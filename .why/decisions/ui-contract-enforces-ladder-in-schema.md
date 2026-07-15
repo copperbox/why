@@ -17,7 +17,7 @@ why:
       as_of: 58dc0db
       state: live
     - path: test/ui-contract.test.ts
-      as_of: 44d4118
+      as_of: 0f75578
       state: live
 ---
 

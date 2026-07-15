@@ -302,6 +302,73 @@ test("why anchor is idempotent: the second run reports current and writes nothin
   assert.equal(await main(["anchor", "--check", "--bundle", whyRoot], repo, check.io), 0);
 });
 
+// --- The PR gate's question (docs/ci.md) ---------------------------------
+//
+// A contributor cannot re-anchor correctly from a branch: their HEAD is what
+// the squash discards. So the gate tolerates drift (the why-anchor job
+// re-stamps it from main) and blocks only on an anchor the PR destroyed.
+
+test("--check --allow-drift tolerates drift and blocks only on a destroyed anchor", async () => {
+  const { repo, whyRoot } = await seedScenario();
+
+  // seedScenario's refactor renames a file (moved), shifts lines (resolved),
+  // and deletes a function (lost) — one of each, in one run.
+  const strict = capture();
+  assert.equal(await main(["anchor", "--check", "--bundle", whyRoot], repo, strict.io), 1);
+
+  const lenient = capture();
+  const code = await main(["anchor", "--check", "--allow-drift", "--bundle", whyRoot], repo, lenient.io);
+  assert.equal(code, 1, "a deleted function destroyed an anchor — that still blocks");
+  const text = lenient.out.join("\n");
+  assert.ok(text.includes("1 anchor lost"), text);
+  assert.ok(text.includes("2 anchors drifted"), text);
+  assert.ok(!text.includes("run `why anchor`"), "must not tell the author to stamp a doomed as_of");
+});
+
+test("--check --allow-drift passes when nothing is destroyed, however much drifted", async () => {
+  const repo = await makeRepo("why-drift-");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const c1 = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/47s-request-deadline.md", deadlineDecision(c1));
+
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML_SHIFTED);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "shift the block");
+
+  const before = await readFile(join(whyRoot, "decisions/47s-request-deadline.md"), "utf8");
+  const { io, out } = capture();
+  const code = await main(["anchor", "--check", "--allow-drift", "--bundle", whyRoot], repo, io);
+  assert.equal(code, 0, `drift alone must not block a PR:\n${out.join("\n")}`);
+  assert.ok(out.join("\n").includes("why-anchor job re-stamps"), out.join("\n"));
+  assert.equal(
+    await readFile(join(whyRoot, "decisions/47s-request-deadline.md"), "utf8"),
+    before,
+    "--check writes nothing, with or without --allow-drift",
+  );
+});
+
+test("an anchor already recorded lost does not block the gate forever", async () => {
+  const { repo, whyRoot } = await seedScenario();
+  // Record reality once, from a state where the deletion is already committed.
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, capture().io), 0);
+
+  const { io, out } = capture();
+  const code = await main(["anchor", "--check", "--allow-drift", "--bundle", whyRoot], repo, io);
+  assert.equal(code, 0, `a committed state: lost is doctor's business, not the gate's:\n${out.join("\n")}`);
+});
+
+test("--allow-drift without --check is a usage error, not a silent no-op", async () => {
+  const { repo, whyRoot } = await seedScenario();
+  const { io, err } = capture();
+  const code = await main(["anchor", "--allow-drift", "--bundle", whyRoot], repo, io);
+  assert.equal(code, 2);
+  assert.ok(err.join("\n").includes("--allow-drift"), err.join("\n"));
+});
+
 test("a lost anchor whose symbol reappears resolves back to live", async () => {
   const { repo, whyRoot } = await seedScenario();
   const first = capture();
@@ -348,6 +415,270 @@ test("--concept scopes resolution and writes to that concept only", async () => 
   );
   assert.equal(bad, 1);
   assert.ok(missing.err.join("\n").includes("no-such-thing"), missing.err.join("\n"));
+});
+
+// --- as_of and squash merges (DESIGN.md §4) ------------------------------
+//
+// A squash merge rewrites a branch into one new commit, so an `as_of` stamped
+// on the branch names a commit that never reaches the integration branch. It
+// survives in the clone that made it and nowhere else — the failure these
+// tests pin is a tool whose answer depends on the operator's local branches.
+
+interface SquashRepo {
+  repo: string;
+  whyRoot: string;
+  /** Last commit on main before the branch — an ancestor of HEAD. */
+  base: string;
+  /** The branch commit the squash discarded: present here, absent in a fresh clone. */
+  orphan: string;
+}
+
+const wholeFileConcept = (path: string, asOf: string) => `---
+type: decision
+title: A whole-file claim
+description: Anchored to a path, so the path existing is the whole claim.
+timestamp: 2026-07-14
+why:
+  status: active
+  happened_on: 2026-07-14
+  confidence: recorded
+  anchors:
+    - path: ${path}
+      as_of: "${asOf}"
+      state: live
+---
+
+# A whole-file claim
+
+Body text.
+`;
+
+const linesConcept = (asOf: string) => `---
+type: decision
+title: A line-range claim
+description: Anchored to lines, so re-lining needs a usable as_of to trace from.
+timestamp: 2026-07-14
+why:
+  status: active
+  happened_on: 2026-07-14
+  confidence: recorded
+  anchors:
+    - path: config/defaults.toml
+      lines: 3-4
+      as_of: "${asOf}"
+      state: live
+---
+
+# A line-range claim
+
+Body text.
+`;
+
+/**
+ * main → a branch commit → a squash of that branch back onto main. The branch
+ * ref is kept, so `orphan` is reachable in this repo exactly as a merged PR's
+ * branch still is on the machine that pushed it.
+ */
+async function seedSquashRepo(rename: boolean): Promise<SquashRepo> {
+  const repo = await makeRepo("why-squash-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  await write(repo, "src/lock.rs", LOCK_RS);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const base = git(repo, "rev-parse", "--short", "HEAD");
+
+  git(repo, "checkout", "-q", "-b", "drafts");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML_SHIFTED);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "draft: shift defaults");
+  const orphan = git(repo, "rev-parse", "--short", "HEAD");
+
+  git(repo, "checkout", "-q", "main");
+  git(repo, "merge", "--squash", "-q", "drafts");
+  git(repo, "commit", "-qm", "squash of drafts (#1)");
+  if (rename) {
+    // A rename that lands on main *after* the branch point, so git can detect
+    // it across `orphan..HEAD` even though orphan is not an ancestor.
+    git(repo, "mv", "src/lock.rs", "src/locking.rs");
+    git(repo, "commit", "-qm", "rename lock.rs");
+  }
+
+  const whyRoot = await scaffoldBundle(repo);
+  return { repo, whyRoot, base, orphan };
+}
+
+test("a squash-orphaned as_of degrades to unverified, not lost, and rewrites nothing", async () => {
+  const { repo, whyRoot, orphan } = await seedSquashRepo(false);
+  await write(repo, ".why/decisions/lines-claim.md", linesConcept(orphan));
+  const before = await readFile(join(whyRoot, "decisions/lines-claim.md"), "utf8");
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+  const text = out.join("\n");
+
+  // The file is right there; only its provenance is unreadable. Calling that
+  // `lost` is the false alarm that trains people to ignore the health report.
+  assert.ok(text.includes("unverified as_of"), text);
+  assert.ok(text.includes("0 lost"), text);
+
+  const after = await readFile(join(whyRoot, "decisions/lines-claim.md"), "utf8");
+  assert.equal(after, before, "an unverifiable as_of must not provoke a rewrite");
+  const anchor = await anchorOf(whyRoot, "decisions/lines-claim");
+  assert.equal(anchor.state, "live");
+  assert.equal(anchor.lines, "3-4", "the recorded lines stay exactly as written");
+  assert.equal(anchor.as_of, orphan, "as_of is kept for forensics, not silently repaired");
+});
+
+test("rename detection refuses to read history through a non-ancestor as_of", async () => {
+  const { repo, whyRoot, base, orphan } = await seedSquashRepo(true);
+
+  // Sanity: git *will* answer the rename question across the orphan, which is
+  // exactly why the ancestry gate has to be explicit rather than incidental.
+  const detected = git(repo, "diff", "--name-status", "-M", orphan, "HEAD");
+  assert.ok(/^R\d*\tsrc\/lock\.rs\tsrc\/locking\.rs$/m.test(detected), detected);
+
+  await write(repo, ".why/decisions/orphan-claim.md", wholeFileConcept("src/lock.rs", orphan));
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+
+  // Following that rename would resolve here and go lost in a fresh clone —
+  // the same bundle answering differently per operator. Refuse it.
+  const orphaned = await anchorOf(whyRoot, "decisions/orphan-claim");
+  assert.equal(orphaned.state, "lost", "a rename seen only through an orphan is not evidence");
+  assert.equal(orphaned.path, "src/lock.rs");
+
+  // The same rename through an ancestor as_of is real history: follow it.
+  await write(repo, ".why/decisions/ancestor-claim.md", wholeFileConcept("src/lock.rs", base));
+  const second = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, second.io), 0);
+  const followed = await anchorOf(whyRoot, "decisions/ancestor-claim");
+  assert.equal(followed.state, "live");
+  assert.equal(followed.path, "src/locking.rs", "an ancestor as_of still follows renames");
+});
+
+// --- Choosing the as_of to stamp -----------------------------------------
+
+/** Record `main` as the remote's default branch, then branch off it. */
+function withIntegrationBranch(repo: string): void {
+  git(repo, "update-ref", "refs/remotes/origin/main", git(repo, "rev-parse", "main"));
+  git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+}
+
+/** A stale `lines` the symbol step will correct, so the anchor really moves. */
+const symbolConcept = (asOf: string) => `---
+type: decision
+title: 47s request deadline
+description: Server-side deadline pinned 2s past the gateway cap.
+timestamp: 2026-07-11
+why:
+  status: active
+  happened_on: 2024-01-15
+  confidence: corroborated
+  anchors:
+    - path: config/defaults.toml
+      symbol: request_deadline
+      lines: 1
+      as_of: "${asOf}"
+      state: live
+---
+
+# 47s request deadline
+
+47 = 45 + 2, so the gateway timeout always fires first.
+`;
+
+test("on a branch, as_of is stamped at the surviving merge-base when the span holds there", async () => {
+  const repo = await makeRepo("why-stamp-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const seed = git(repo, "rev-parse", "--short", "HEAD");
+
+  await write(repo, "CHANGELOG.md", "# changelog\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "later work on main");
+  const mainTip = git(repo, "rev-parse", "--short", "HEAD");
+  withIntegrationBranch(repo);
+
+  // A feature branch that leaves the anchored file alone. Its own HEAD will be
+  // squashed away at merge, so stamping HEAD would orphan the anchor — while
+  // the span is provably identical at the merge-base, which survives.
+  git(repo, "checkout", "-q", "-b", "feature");
+  await write(repo, "README.md", "# unrelated\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "unrelated work");
+  const featureTip = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/47s-request-deadline.md", symbolConcept(seed));
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+
+  const anchor = await anchorOf(whyRoot, "decisions/47s-request-deadline");
+  assert.equal(anchor.lines, "4", "the symbol step re-lined the claim");
+  assert.equal(anchor.as_of, mainTip, "stamp the newest commit certain to survive the squash");
+  assert.notEqual(anchor.as_of, featureTip, "HEAD here is exactly what a squash discards");
+  assert.notEqual(anchor.as_of, seed, "and it is a fresh stamp, not the old value kept");
+});
+
+test("as_of falls back to HEAD when the span cannot be verified at the merge-base", async () => {
+  const repo = await makeRepo("why-stamp-head-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const mainTip = git(repo, "rev-parse", "--short", "HEAD");
+  withIntegrationBranch(repo);
+
+  // This branch moves the anchored lines, so the merge-base is precisely where
+  // the new span is *not* valid. Stamping it would re-point the anchor at
+  // whatever text held those line numbers back then — the silently-wrong
+  // anchor. HEAD is truthful even though the squash will orphan it.
+  git(repo, "checkout", "-q", "-b", "feature");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML_SHIFTED);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "shift the deadline block");
+  const featureTip = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/47s-request-deadline.md", deadlineDecision(mainTip));
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+
+  const anchor = await anchorOf(whyRoot, "decisions/47s-request-deadline");
+  assert.equal(anchor.lines, "5-6", "the span moved on this branch");
+  assert.equal(anchor.as_of, featureTip, "an unverifiable merge-base loses to a truthful HEAD");
+  assert.notEqual(anchor.as_of, mainTip);
+});
+
+test("on the integration branch itself, as_of is stamped at HEAD", async () => {
+  const repo = await makeRepo("why-stamp-main-");
+  git(repo, "checkout", "-q", "-b", "main");
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "seed");
+  const seed = git(repo, "rev-parse", "--short", "HEAD");
+  withIntegrationBranch(repo);
+
+  await write(repo, "config/defaults.toml", DEFAULTS_TOML_SHIFTED);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-qm", "shift");
+  git(repo, "update-ref", "refs/remotes/origin/main", git(repo, "rev-parse", "main"));
+  const mainTip = git(repo, "rev-parse", "--short", "HEAD");
+
+  const whyRoot = await scaffoldBundle(repo);
+  await write(repo, ".why/decisions/47s-request-deadline.md", deadlineDecision(seed));
+
+  const { io, out } = capture();
+  assert.equal(await main(["anchor", "--bundle", whyRoot], repo, io), 0, out.join("\n"));
+
+  // HEAD is contained in the integration branch, so HEAD survives and is both
+  // the truthful and the durable stamp — no merge-base indirection.
+  assert.equal((await anchorOf(whyRoot, "decisions/47s-request-deadline")).as_of, mainTip);
 });
 
 // The grep-heuristic symbol finder never guesses: ambiguity and absence both

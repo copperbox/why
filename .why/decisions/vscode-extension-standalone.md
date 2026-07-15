@@ -18,10 +18,10 @@ why:
       as_of: 61a4e85
       state: live
     - path: vscode-why/package.json
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: vscode-why/src/extension.ts
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: vscode-why/src/core/contract.ts
       as_of: 61a4e85
@@ -30,7 +30,7 @@ why:
       as_of: 61a4e85
       state: live
     - path: docs/vscode.md
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
 ---
 

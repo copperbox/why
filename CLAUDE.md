@@ -23,7 +23,8 @@ Decision archaeology for codebases: recover the *why* behind code from git/PR/is
 - **Anchors are live or lost, never silently wrong.** No code path may quietly emit a stale anchor.
 - Every `why` bundle must stay a valid plain-OKF bundle — all extensions live in the `why:` frontmatter map and section conventions. If a feature needs to break that, it's a design discussion, not a patch.
 - `examples/harbor/` is both the demo and the test fixture — schema changes must update it in the same session.
-- Run `npm run verify` before proposing a change as done. The PR gate runs `why lint` + `why anchor --check` on this repo's own bundle, so a change that moves anchored code needs `why anchor` run too.
+- Run `npm run verify` before proposing a change as done. The PR gate runs `why lint` + `why anchor --check --allow-drift` on this repo's own bundle.
+- **Never run `why anchor` (write mode) on a branch.** `as_of` must name a commit `main` keeps, and a squash merge discards branch commits — the `why-anchor` job re-stamps drift from `main` after the merge. Reporting drift on a branch is expected; the gate only fails when a change *destroys* an anchor.
 
 ## Neighbors
 

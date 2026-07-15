@@ -27,10 +27,18 @@ instead of a global install while developing.
 4. `npm run verify` must pass.
 5. Open a PR describing what changed and why.
 
-The PR gate runs `why lint` and `why anchor --check` against this repo's own
-`.why/` bundle, plus the test suite. If your change moves code that concepts
-anchor to, run `why anchor` and commit the refreshed anchors — a stale anchor
-fails the gate by design.
+The PR gate runs `why lint` and `why anchor --check --allow-drift` against this
+repo's own `.why/` bundle, plus the test suite.
+
+**Don't run `why anchor` on your branch.** If your change moves code that
+concepts anchor to, the gate reports the drift and lets it through: the
+`why-anchor` job re-stamps it from `main` after the merge. Anchoring from a
+branch would write an `as_of` pointing at a commit the squash merge discards
+(DESIGN.md §4), which is the one thing that cannot be done correctly from here.
+
+The gate does fail if your change **destroys** an anchor — deletes code a
+concept claims. No re-anchoring recovers that; update the concept, or file a
+`question` if the rationale no longer has a home.
 
 ## The invariants
 

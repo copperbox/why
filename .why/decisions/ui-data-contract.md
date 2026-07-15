@@ -20,7 +20,7 @@ why:
       as_of: 0f75578
       state: live
     - path: docs/ui-contract.md
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: schemas/story.schema.json
       as_of: 58dc0db

@@ -40,7 +40,8 @@ why:
     - path: src/lock.rs
       symbol: acquire_shared # optional but strongly preferred over bare lines
       lines: 41-58
-      as_of: a3f9c2e         # commit at which path+lines were valid
+      as_of: a3f9c2e         # commit at which path+lines were valid; must be
+                             # an ancestor of the integration branch (§4)
       state: live            # live | lost — maintained by `why anchor`, never by hand
 ---
 ```
@@ -120,9 +121,21 @@ The hard engineering problem. Design decisions:
 
 **Resolution order** (`why anchor`, run in CI or pre-commit):
 
-1. **Symbol-first.** If `symbol` is set, find it at HEAD (ctags/tree-sitter per language; fall back to a grep heuristic). Found in the same file → update `lines`, done. Found in a different file → follow only if git history connects them (rename/move detection via `git log --follow -M -C` between `as_of` and HEAD).
+1. **Symbol-first.** If `symbol` is set, find it at HEAD (ctags/tree-sitter per language; fall back to a grep heuristic). Found in the same file → update `lines`, done. Found in a different file → follow only if git history connects them (rename/move detection via `git log --follow -M -C` between `as_of` and HEAD) **and `as_of` is an ancestor of HEAD** — see "`as_of` must be an ancestor" below.
 2. **Blame-trace.** No symbol, or symbol gone: trace the anchored lines forward from `as_of` with incremental `git blame`-style tracking (the same problem `git log -L` solves). Lines that survive → new range.
-3. **Lost.** Neither resolves → set `state: lost`, keep the last-known anchor for forensics, surface in `why doctor`. A lost anchor on an `active` concept is a warning; ten lost anchors after a big refactor is the signal to re-dig that area.
+3. **Unverified.** `as_of` is not an ancestor of HEAD (or does not resolve here), so there is no history to trace from, but the anchored path is still present at HEAD → leave the entry exactly as recorded, report `unverified as_of`. The claim is neither confirmed nor refuted: the code is there, the provenance is unreadable. `why anchor` writes nothing, and `why doctor` reports it.
+4. **Lost.** None of the above resolves → set `state: lost`, keep the last-known anchor for forensics, surface in `why doctor`. A lost anchor on an `active` concept is a warning; ten lost anchors after a big refactor is the signal to re-dig that area.
+
+**`as_of` must be an ancestor.** An `as_of` is readable as history only when it is an ancestor of HEAD. This is not pedantry — it is the difference between a reproducible tool and a superstition:
+
+- git answers `diff`/`blame` between *any* two commits it happens to have locally, related or not. A rename detected across a non-ancestor `as_of` therefore resolves on the machine whose clone still has that branch and fails in a fresh clone of the integration branch — the same bundle, the same commit, two different answers.
+- `git blame --reverse` interprets `-L` against the **`as_of`** revision, not HEAD. So a plausible-but-unverified `as_of` does not merely fail; it re-points the anchor at whatever text occupied those line numbers there. That is the silently-wrong anchor §2's promise forbids.
+
+Ancestry is the only property of an `as_of` that every clone of the same history agrees on, so it gates every read of history through one.
+
+**Which commit `why anchor` stamps.** HEAD is the commit the span was verified against, so HEAD is the default and always truthful. But a squash merge (or rebase) rewrites a whole branch into one new commit, so an `as_of` stamped on a branch names a commit that never reaches the integration branch — truthful when written, unresolvable a day later. So when HEAD is *not* contained in the integration branch (`refs/remotes/origin/HEAD`, when git records one), `why anchor` prefers the merge-base — the newest commit certain to survive — **but only when the identical span verifiably holds there**. It usually does not for a span the branch just changed, and inventing one would be exactly the silently-wrong anchor above; so an unverifiable merge-base loses to a truthful HEAD, which may later orphan and degrade to `unverified` (step 3). Stable anchors are never re-stamped at all — see [as_of is provenance](.why/decisions/as-of-is-provenance.md).
+
+**Anchors are written from the integration branch.** The stamping rule above is damage control for a `why anchor` run somewhere it shouldn't be; the operational rule is that anchors are re-stamped by CI on `main` after a merge, never by a contributor on a branch (docs/ci.md). Only the integration branch hands out commits it keeps, so this is the only place every `as_of` is durable by construction — including for a file *born* on a squashed branch, where no earlier commit exists to point at and no branch-side stamp could have been right. The PR gate therefore reports drift without failing on it (`why anchor --check --allow-drift`) and fails only on an anchor the change destroyed. The cost is that the bundle is eventually consistent: between a merge and the re-anchor landing, `main`'s anchors can be stale — honestly `lost` or `unverified`, never silently wrong.
 
 **Anchors update mechanically, concepts don't.** `why anchor` rewrites only the `why.anchors` entries (via okf-mcp `update_concept`, which patches frontmatter without touching the body). It never edits narrative.
 

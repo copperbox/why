@@ -67,7 +67,7 @@ Links between concepts are ordinary markdown links; the section a link sits in (
 Two properties are non-negotiable and shape everything:
 
 1. **Honesty about confidence.** Reconstructed history is partly inference. Every concept carries `confidence: recorded | corroborated | inferred | speculative`, and rationale below `corroborated` is always rendered with hedging. A wrong "why" stated confidently is worse than no "why". Unrecoverable rationale becomes a `question` concept, not a guess.
-2. **Anchors are live or dead, never silently stale.** Every code-touching concept anchors to `path + symbol + line range + as-of commit`. `why anchor` re-resolves anchors across renames and refactors; an anchor it cannot re-resolve is marked `lost` and surfaces in `why doctor` — it never silently points at the wrong code.
+2. **Anchors are live or dead, never silently stale.** Every code-touching concept anchors to `path + symbol + line range + as-of commit`. `why anchor` re-resolves anchors across renames and refactors; an anchor it cannot re-resolve is marked `lost` and surfaces in `why doctor` — it never silently points at the wrong code. Where it can confirm the code but not the provenance, it says exactly that (`unverified as_of`) rather than guessing in either direction — see [Squash merges and `as_of`](#squash-merges-and-as_of).
 
 ## Why OKF as the substrate
 
@@ -85,17 +85,49 @@ Named here so we never pretend otherwise (expanded in [DESIGN.md §Open problems
 - **Hallucinated rationale** is the hard trust problem. The confidence ladder and evidence-citation requirements exist because a decision archive people can't trust is worse than none.
 - **Cold start** is the hard adoption problem. Nobody hand-writes ADRs retroactively; `why dig` must produce a genuinely useful first bundle from history alone, unattended, or the tool never gets a chance.
 
+## Squash merges and `as_of`
+
+If your project squash-merges (or rebases) pull requests — most do — this section is worth two minutes, because it explains a report you will eventually see.
+
+Every anchor records an `as_of`: the commit at which `why` last verified that this concept was about this code. It is provenance, and it is also how re-anchoring works — `why anchor` traces your lines *forward from `as_of`* to find where they live now.
+
+A squash merge throws that commit away. Ten commits on `add-rate-limiter` become one brand-new commit on `main`, and the branch commits are never part of `main`'s history. So an anchor stamped while you were on the branch names a commit that, after the merge, exists only in the clone that made it:
+
+```
+main      A ─────────────── S          S = the squash. Your branch's commits
+              \            /               are not in main's history at all.
+branch         B ─── C ───┘            C = what `as_of: c0ffee` pointed to
+```
+
+Anchor `as_of: c0ffee` still resolves on *your* laptop, because your clone kept the branch. In CI — a fresh clone of `main` — that commit does not exist. A tool that read history through it would answer differently on each machine, which is worse than a tool that fails: it would be a health report you cannot reproduce.
+
+**What `why` does about it.**
+
+- **`why anchor` avoids creating the problem.** When you are on a branch that git can tell is not the integration branch, it stamps the *merge-base* — the newest commit certain to survive the squash — instead of your branch HEAD, but only when it can verify the identical span is really there. When it can't verify that (usually because your branch is what changed those lines), it stamps HEAD honestly rather than assert a span it didn't check.
+- **Resolution never reads through an orphan.** An `as_of` that isn't an ancestor of HEAD is not used for rename-following or blame-tracing, even when your local clone could technically answer. This is what keeps CI and your laptop agreeing.
+- **An unreadable `as_of` is not a dead anchor.** If the path is still there but `as_of` can't be traced from, `why anchor` reports `unverified as_of`, changes nothing, and `why doctor` lists it. The code is fine; only the provenance is unreadable. Calling that `lost` would be a false alarm, and false alarms are how a health report gets ignored.
+
+**What you'll see.** `why doctor` reporting a few `stale as_of` findings after a squash-merged PR is expected, not a defect. They are yellow, not red, and they don't fail CI: the anchor isn't asserting anything false, it just can't show its work.
+
+They appear when the anchored code is exactly what the branch changed — a file *born* there, or a span it rewrote. In that case the merge-base genuinely does not contain the span, no surviving commit does, and the only truthful `as_of` was the branch commit the squash then discarded. `why` records that and says so rather than substituting a commit where the code looks close enough.
+
+Re-running `why anchor` will not clear them, and that is deliberate rather than an oversight: it will not invent provenance it cannot verify, and it never re-stamps an anchor that still resolves cleanly, because an old `as_of` means the anchor has *survived unchanged* since then — a feature, not drift ([decision](.why/decisions/as-of-is-provenance.md)). An anchor carrying a `symbol` heals itself the next time that symbol moves, since the symbol step re-resolves without needing `as_of` at all. A bare `path + lines` anchor has nothing left to trace from, so it stays put and stays labelled — one more reason DESIGN.md prefers `symbol` over bare line ranges.
+
+The finding is not noise; it is an accurate statement about your history: this code's provenance was squashed away, and no amount of re-running will bring it back. Re-stamping such anchors from the merge commit *after* the fact is a real fix and is tracked separately.
+
+Nothing here requires configuration. `why` reads your integration branch from `refs/remotes/origin/HEAD` (git records it at clone time; `git remote set-head origin -a` refreshes it). Where there is no such record — a single-branch CI clone, a repo with no remote — `why` stamps HEAD, which is what it did before and remains truthful.
+
 ## Self-hosted
 
 `why` runs on its own repository: [`.why/`](.why/index.md) is this repo's live
 decision archive — the project's bootstrap decisions captured as `decision`
 concepts (confidence `recorded`, citations to the actual commits and PRs) —
 and the living demo of the schema on a real codebase. It stays true
-mechanically: every PR runs `why lint` + `why anchor --check`, a weekly job
-runs `why audit`, and merged PRs get drafted into `.why/.drafts/` by
-`why capture` — the exact workflows documented in [docs/ci.md](docs/ci.md),
-active under [`.github/workflows/`](.github/workflows). Browse it like any
-bundle:
+mechanically: every PR runs `why lint` + `why anchor --check --allow-drift`,
+every push to `main` re-anchors from the commit that landed, a weekly job runs
+`why audit`, and merged PRs get drafted into `.why/.drafts/` by `why capture` —
+the exact workflows documented in [docs/ci.md](docs/ci.md), active under
+[`.github/workflows/`](.github/workflows). Browse it like any bundle:
 
 ```bash
 npx -y @copperbox/okf-mcp --bundle why=.why inspect
@@ -103,10 +135,10 @@ npx -y @copperbox/okf-mcp --bundle why=.why inspect
 
 ## Getting started
 
-All ten subcommands ship, the three CI recipes run on this repo's own `.why/`
+All ten subcommands ship, the four CI recipes run on this repo's own `.why/`
 bundle, and both viewers (`why serve` and the VS Code extension) render live.
 **[HOWTO.md](HOWTO.md) is the adoption guide** — scaffold a bundle, cold-start
-a dig, wire up the PR gate / weekly audit / post-merge capture jobs, and the
+a dig, wire up the PR gate / re-anchor / weekly audit / post-merge capture jobs, and the
 team habits that make it pay off.
 
 ```bash

@@ -16,7 +16,7 @@ why:
     - path: src/cli.ts
       symbol: isDirectRun
       lines: 645-653
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: test/cli.test.ts
       lines: 73-95

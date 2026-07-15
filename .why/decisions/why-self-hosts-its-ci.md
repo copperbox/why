@@ -21,7 +21,7 @@ why:
       as_of: a735c62
       state: live
     - path: .github/workflows/why-capture.yml
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: docs/ci.md
       as_of: a735c62
