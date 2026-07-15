@@ -19,15 +19,12 @@ why:
       as_of: 61a4e85
       state: live
     - path: src/serve.ts
-      lines: 1-290
       as_of: 61a4e85
       state: live
     - path: src/serve-assets.ts
-      lines: 1-63
       as_of: 61a4e85
       state: live
     - path: ui/story-panel.js
-      lines: 1-125
       as_of: 61a4e85
       state: live
 ---

@@ -19,13 +19,13 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 const WORKFLOWS_DIR = ".github/workflows";
-const EXPECTED_WORKFLOWS = ["why-pr-gate.yml", "why-audit.yml", "why-capture.yml"];
+const EXPECTED_WORKFLOWS = ["why-pr-gate.yml", "why-anchor.yml", "why-audit.yml", "why-capture.yml"];
 
 function workflowFiles(): string[] {
   return readdirSync(join(root, WORKFLOWS_DIR)).filter((f) => /\.ya?ml$/.test(f)).sort();
 }
 
-test("the three issue-403 workflows exist under .github/workflows/", () => {
+test("the why workflows exist under .github/workflows/", () => {
   const files = workflowFiles();
   for (const expected of EXPECTED_WORKFLOWS) {
     assert.ok(files.includes(expected), `${WORKFLOWS_DIR}/${expected} is missing (have: ${files.join(", ")})`);

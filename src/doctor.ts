@@ -26,10 +26,18 @@ export interface AnchorItem {
 
 /**
  * Why a live anchor's as_of is a real concern: it names a commit unrelated to
- * HEAD (history diverged or was rebased away), or one this repository cannot
- * resolve at all. A clean ancestor behind HEAD is stable provenance — the
- * `why anchor` claim (DESIGN.md §2/§4: "the commit at which path+lines were
- * valid") has simply survived unchanged since then — so it is not flagged.
+ * HEAD (history diverged, or a squash merge discarded the branch it was
+ * stamped on), or one this repository cannot resolve at all. A clean ancestor
+ * behind HEAD is stable provenance — the `why anchor` claim (DESIGN.md §2/§4:
+ * "the commit at which path+lines were valid") has simply survived unchanged
+ * since then — so it is not flagged.
+ *
+ * These are the anchors `why anchor` reports as `unverified as_of`: the code
+ * is present, the provenance is unreadable. That is maintenance debt (yellow),
+ * not a broken archive (red) — the anchor is not asserting anything false. The
+ * two reasons differ only by whether this clone happens to still have the
+ * commit, which is why neither is trusted to read history through (DESIGN.md
+ * §4 "`as_of` must be an ancestor") and why both read as the same finding.
  */
 export type StaleReason = "not-ancestor" | "unresolved";
 

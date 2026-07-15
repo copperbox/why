@@ -14,15 +14,12 @@ why:
   confidence: recorded
   anchors:
     - path: src/serve-assets.ts
-      lines: 1-63
       as_of: 61a4e85
       state: live
     - path: ui/graph.js
-      lines: 1-164
       as_of: 61a4e85
       state: live
     - path: ui/highlight.js
-      lines: 1-202
       as_of: 9c434ae
       state: live
 ---

@@ -1,8 +1,14 @@
 name: why-pr-gate
 
 # PR gate (docs/ci.md): the archive may not merge in a state it cannot back.
-# `why lint` enforces the schema; `why anchor --check` fails on anchor drift
-# without writing anything — run `why anchor` locally and commit the result.
+# `why lint` enforces the schema. `why anchor --check --allow-drift` fails only
+# on an anchor this PR *destroyed* — code it claimed is gone, which no
+# re-anchoring can recover and which the author has to resolve.
+#
+# Drift (a span that merely moved) is deliberately not a failure: fixing it here
+# would mean running `why anchor` on this branch, stamping an `as_of` that the
+# squash merge then discards (DESIGN.md §4). The why-anchor job re-stamps drift
+# from main after the merge, where the commit survives.
 on:
   pull_request:
 
@@ -19,4 +25,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run why -- lint
-      - run: npm run why -- anchor --check
+      - run: npm run why -- anchor --check --allow-drift

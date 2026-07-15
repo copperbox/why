@@ -1,0 +1,51 @@
+name: why-anchor
+
+# Post-merge re-anchoring (docs/ci.md, DESIGN.md §4). Anchors are re-stamped
+# only from main, never from a branch: `as_of` records the commit a span was
+# verified at, and a squash merge rewrites branch commits into one new commit,
+# so an as_of stamped on a branch names something that never reaches main. Run
+# from main, every as_of is a commit main keeps.
+#
+# The result is PR'd back rather than pushed, so branch protection stays on and
+# the frontmatter-only diff is reviewable. The as_of values inside the files
+# name main commits, so squashing *this* PR does not orphan them.
+on:
+  push:
+    branches: [main]
+
+# One at a time: two merges in quick succession would otherwise race to write
+# the same branch.
+concurrency:
+  group: why-anchor
+  cancel-in-progress: false
+
+jobs:
+  anchor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0 # anchor resolution traces line ranges from as_of to HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run why -- anchor
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          branch: why-anchors
+          add-paths: .why
+          title: "why: re-anchor from main"
+          commit-message: "why anchor: re-stamp from ${{ github.sha }}"
+          body: |
+            Mechanical re-anchoring from `main` (`${{ github.sha }}`).
+
+            `why anchor` rewrites only `why.anchors` entries — never narrative —
+            so this diff is frontmatter-only. Anchors are stamped here rather
+            than on the contributing branch because a squash merge discards
+            branch commits, and an `as_of` must name a commit main keeps.

@@ -1,4 +1,4 @@
-// Incremental dig state (DESIGN.md §6, issues/304): the high-water mark under
+// Incremental dig state (DESIGN.md §6): the high-water mark under
 // .why/.dig-state.json. The contract under test: the mark advances only after
 // a successful emission (atomically), an empty range emits nothing and touches
 // nothing, deleting the file just means "re-dig everything", and a state file

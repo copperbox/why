@@ -121,10 +121,10 @@ by the people who lived it — that review is itself high-quality evidence.
 
 ---
 
-## 3. Wire up CI — three jobs, then you can forget about it
+## 3. Wire up CI — four jobs, then you can forget about it
 
 The whole point is that no human has to *remember* to keep the archive honest.
-Three GitHub Actions jobs do it. This repo runs all three on its own `.why/`
+Four GitHub Actions jobs do it. This repo runs all four on its own `.why/`
 bundle as the live demo — copy them from
 [`.github/workflows/`](.github/workflows) and read [docs/ci.md](docs/ci.md) for
 the annotated versions. In a consuming repo, replace `npm ci` + `npm run why --`
@@ -134,25 +134,62 @@ Every job needs **`fetch-depth: 0`** — anchor tracing and capture read history
 from the `as_of`/merge commit forward; a shallow clone makes honest anchors
 unresolvable.
 
+One rule explains the shape: **anchors are written from `main`, never from a
+branch.** An `as_of` records the commit a span was verified at, and if you
+squash-merge (most repos do), a branch's commits are rewritten into one new
+commit — so an `as_of` stamped on a branch names something `main` never had.
+Only `main` hands out commits `main` keeps.
+
 | Job | Trigger | Command | Why |
 |---|---|---|---|
-| **PR gate** | every PR | `why lint` + `why anchor --check` | the archive may not merge in a state it can't back |
+| **PR gate** | every PR | `why lint` + `why anchor --check --allow-drift` | the archive may not merge in a state it can't back |
+| **Re-anchor** | push to `main` | `why anchor` | spans that moved get re-stamped at a commit that survives |
 | **Weekly audit** | cron (e.g. Mon) | `why audit` | constraints get re-verified; expiry becomes a visible event |
 | **Post-merge capture** | PR closed | `why capture --pr <n>` | new decisions get drafted while rationale is fresh |
 
-### 3.1 PR gate — `why lint` + `why anchor --check`
+### 3.1 PR gate — `why lint` + `why anchor --check --allow-drift`
 
-Fails on schema errors (missing sections, bad edge targets, uncited
-confidence claims) and on **anchor drift** — `why anchor --check` re-resolves
-every anchor against the PR's HEAD and exits 1 without writing. The fix a
-contributor makes is to run `why anchor` locally and commit the frontmatter
-update. An anchor already committed as `state: lost` does *not* fail the gate
-(that's `doctor`'s job to surface, not a merge blocker).
+Fails on schema errors (missing sections, bad edge targets, uncited confidence
+claims), and on an anchor the PR **destroyed** — code a concept claimed, now
+gone. That is the author's to resolve, because no re-anchoring brings it back:
+update the concept or file a `question`.
 
-This is the job that makes "anchors are live or lost, never silently wrong" a
-mechanical guarantee instead of a hope.
+It does *not* fail on drift (a span that merely moved). Drift is reported and
+left to the re-anchor job. This is deliberate: the only way a contributor could
+"fix" drift on their branch is `why anchor`, which stamps an `as_of` at a branch
+HEAD the squash then discards — the gate would be demanding the one thing that
+cannot be done right from a branch. An anchor already committed as
+`state: lost` does not fail either (that's `doctor`'s job to surface, not a
+merge blocker).
 
-### 3.2 Weekly audit — `why audit`
+Drop `--allow-drift` for the strict question — "is this bundle fully current
+with this commit?" — which is the right check on `main`, not on a PR.
+
+### 3.2 Re-anchor — `why anchor` on `main`
+
+Triggers on every push to `main`, re-resolves every anchor against the commit
+that actually landed, and PRs the frontmatter-only result back. Running from
+`main` is what makes every `as_of` durable — including for a file *born* on the
+squashed branch, which has no earlier commit to point at and which a
+contributor could never have anchored correctly. It also repairs the orphans a
+squash leaves behind: an `as_of` naming a discarded branch commit is re-stamped
+to the landed commit whenever the claim re-verifies at HEAD without it (a
+present whole-file path, a re-found symbol). A bare `path + lines` claim is the
+exception — nothing can verify the lines without readable history, so it stays
+`unverified as_of` rather than guessed at (DESIGN.md §4).
+
+It PRs back rather than pushing, so branch protection stays on. Squashing that
+PR is harmless: the `as_of` values inside name `main` commits, and content
+survives a squash unchanged. Exclude the branch it opens from your capture job,
+or capture will draft a concept about the anchor bot.
+
+The trade: anchors on `main` are briefly stale between a merge and the
+re-anchor PR landing. The bundle is eventually consistent — during that window
+`why blame` may report an old span, and it reports an honest `lost`, never a
+wrong one. Together these two jobs are what make "anchors are live or lost,
+never silently wrong" a mechanical guarantee instead of a hope.
+
+### 3.3 Weekly audit — `why audit`
 
 Sweeps every active constraint: runs `verify.method: check` commands directly,
 flags overdue `review_by` dates, and lists `method: ask` constraints for an
@@ -168,7 +205,7 @@ The `ask`-constraints the job merely *reports* — answering them is an agent
 session: `why audit --questions-out questions.json`, an agent fills it in,
 `why audit --answers answers.json` applies it. The CLI never calls an LLM.
 
-### 3.3 Post-merge capture — `why capture --pr <n>`
+### 3.4 Post-merge capture — `why capture --pr <n>`
 
 When a PR closes, drafts a concept from its description and review thread into
 `.why/.drafts/` — merged → `decision`, closed-unmerged → `attempt`, anchors
@@ -226,13 +263,17 @@ explicitly — put them in your contributing guide and your `CLAUDE.md`.
 
 Once bootstrapped, the cadence is light:
 
-- **Per PR** — the gate runs automatically. Contributors run `why anchor`
-  locally and commit its frontmatter update when the gate flags drift.
-- **Per merge** — capture drafts automatically onto `why-drafts`.
+- **Per PR** — the gate runs automatically. Contributors do nothing about
+  drift; they act only when the gate says an anchor was *destroyed*, which
+  means a concept lost the code it described.
+- **Per merge** — re-anchoring re-stamps drift from `main` onto `why-anchors`,
+  and capture drafts onto `why-drafts`. Both arrive as PRs.
 - **Weekly** — the audit runs. Pair a weekly look at the `why-drafts` branch
   (promote or discard accumulated capture drafts via `skills/capture` or by
   hand) with triaging any audit issue and its write-back PR. This is the one
-  standing ~30-minute ritual.
+  standing ~30-minute ritual. The `why-anchors` PRs are mechanical and
+  frontmatter-only — merge them promptly (or enable auto-merge); every hour one
+  sits is an hour `main`'s anchors are stale.
 - **On big refactors** — a wave of `lost` anchors in `why doctor` is the
   signal to **re-dig that area**: the code is genuinely new, so let the
   archaeology catch up rather than forcing stale anchors forward.
@@ -296,7 +337,8 @@ skills for the agent sessions that run the archaeology and promotion passes.
 - [ ] `why init --capture-snippet`, commit the empty bundle
 - [ ] Cold-start dig over tells + hot files; open as reviewed PRs
 - [ ] `why anchor && why lint && why doctor` all clean
-- [ ] PR gate workflow (`lint` + `anchor --check`, `fetch-depth: 0`)
+- [ ] PR gate workflow (`lint` + `anchor --check --allow-drift`, `fetch-depth: 0`)
+- [ ] Re-anchor workflow on push to `main` (`why-anchors` branch), excluded from capture
 - [ ] Weekly audit workflow (issue + write-back PR on exit 1)
 - [ ] Post-merge capture workflow (`why-drafts` branch)
 - [ ] Contributing guide + `CLAUDE.md`: consult-before-change, record-while-fresh, file-a-question-not-a-guess

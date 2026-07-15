@@ -1,4 +1,4 @@
-// Incremental dig state (DESIGN.md §6, issues/304-dig-incremental.md): the
+// Incremental dig state (DESIGN.md §6): the
 // high-water mark under <bundle>/.dig-state.json that lets routine
 // `why dig --episodes` runs process only new history. The contract, in
 // priority order:

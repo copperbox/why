@@ -173,15 +173,26 @@ async function runBlame({ values, positionals, bundle, io }: CommandContext): Pr
 /** `why anchor` — re-resolve every anchor claim against HEAD (DESIGN.md §4). */
 async function runAnchor({ values, positionals, bundle, io }: CommandContext): Promise<number> {
   if (positionals.length > 0) {
-    io.err("why anchor: takes no positional arguments — usage: why anchor [--check] [--concept <id>]");
+    io.err(
+      "why anchor: takes no positional arguments — usage: why anchor [--check [--allow-drift]] [--concept <id>]",
+    );
     return 2;
   }
   const check = values.check === true;
+  const allowDrift = values["allow-drift"] === true;
+  if (allowDrift && !check) {
+    io.err("why anchor: --allow-drift only means something with --check — usage: why anchor --check --allow-drift");
+    return 2;
+  }
   try {
     const report = await resolveAnchors(bundle!, { concept: values.concept as string | undefined });
     const written = check ? [] : await writeAnchorUpdates(bundle!, report);
-    for (const line of renderAnchorReport(report, { check, written })) io.out(line);
-    return check && report.results.some((r) => r.changed) ? 1 : 0;
+    for (const line of renderAnchorReport(report, { check, written, allowDrift })) io.out(line);
+    if (!check) return 0;
+    // --allow-drift is the PR gate's question (DESIGN.md §4, docs/ci.md): drift
+    // is expected on a branch and gets re-stamped from main after the merge, so
+    // only an anchor this change *destroys* is worth blocking on.
+    return report.results.some((r) => (allowDrift ? r.outcome === "lost" && r.changed : r.changed)) ? 1 : 0;
   } catch (e) {
     if (e instanceof AnchorError) {
       io.err(`why anchor: ${e.message}`);
@@ -521,7 +532,12 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     run: runBlame,
   },
   anchor: {
-    options: { ...BUNDLE_OPTIONS, check: { type: "boolean" }, concept: { type: "string" } },
+    options: {
+      ...BUNDLE_OPTIONS,
+      check: { type: "boolean" },
+      "allow-drift": { type: "boolean" },
+      concept: { type: "string" },
+    },
     needsBundle: true,
     run: runAnchor,
   },

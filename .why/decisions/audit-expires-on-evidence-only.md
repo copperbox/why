@@ -16,11 +16,9 @@ why:
   confidence: recorded
   anchors:
     - path: src/audit.ts
-      lines: 1-640
       as_of: a735c62
       state: live
     - path: test/audit.test.ts
-      lines: 1-460
       as_of: a735c62
       state: live
 ---

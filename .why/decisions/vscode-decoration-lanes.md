@@ -37,10 +37,6 @@ why:
       lines: 53-72
       as_of: e31b5b389e5a8a2c040098a88c5db748c206eb93
       state: live
-    - path: issues/504-decoration-toggle.md
-      lines: 1-53
-      as_of: e31b5b389e5a8a2c040098a88c5db748c206eb93
-      state: live
 ---
 
 # Coverage decorations are two independently-toggleable lanes, with the scrollbar mark off by default
@@ -49,7 +45,7 @@ The extension's inline coverage paint is no longer a single always-on decoration
 
 # Why
 
-Recorded in the PR description, the merge commit message, and the spec of record in `issues/504-decoration-toggle.md` [1][2]. The paint is passive: before this it was on whenever the extension was active, and the only way to quiet it was to disable the extension outright. That is the right default for discovery but intrusive during regular editing — the scrollbar mark most of all, because it stays visible even when the covered code is scrolled away, so it ships off by default while the gutter stripe stays on.
+Recorded in the PR description, the merge commit message, and the spec of record that was `issues/504-decoration-toggle.md` at the time [1][2][3]. The paint is passive: before this it was on whenever the extension was active, and the only way to quiet it was to disable the extension outright. That is the right default for discovery but intrusive during regular editing — the scrollbar mark most of all, because it stays visible even when the covered code is scrolled away, so it ships off by default while the gutter stripe stays on.
 
 The shape follows from that. The lanes are separate decoration types because a single type carrying both a border and an `overviewRulerColor` cannot hide one without the other. A hidden lane is cleared rather than skipped so no mark lingers after a toggle-off. The repaint listens on configuration change instead of re-running the CLI because coverage is already cached, which is what makes the toggle feel like one keystroke. Only the always-on paint is gated: hovers and *Show Story* are on-demand rather than passive, so they are never the thing you are trying to mute and stay available regardless.
 
@@ -61,3 +57,4 @@ The shape follows from that. The lanes are separate decoration types because a s
 
 [1] [PR #38: vscode: toggle for coverage decorations (scrollbar mark off by default)](https://github.com/copperbox/why/pull/38)
 [2] [merge commit e31b5b3](https://github.com/copperbox/why/commit/e31b5b389e5a8a2c040098a88c5db748c206eb93)
+[3] [issues/504-decoration-toggle.md, the spec of record, at its last living commit](https://github.com/copperbox/why/blob/e31b5b389e5a8a2c040098a88c5db748c206eb93/issues/504-decoration-toggle.md)

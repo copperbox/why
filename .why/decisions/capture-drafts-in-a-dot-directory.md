@@ -16,15 +16,12 @@ why:
   confidence: recorded
   anchors:
     - path: src/capture.ts
-      lines: 1-610
       as_of: a735c62
       state: live
     - path: docs/capture.md
-      lines: 1-109
       as_of: a735c62
       state: live
     - path: skills/capture/SKILL.md
-      lines: 1-107
       as_of: a735c62
       state: live
 ---

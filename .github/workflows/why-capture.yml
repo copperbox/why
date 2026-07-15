@@ -9,7 +9,9 @@ on:
 
 jobs:
   capture:
-    if: github.event.pull_request.head.ref != 'why-drafts'
+    # `why`'s own bot PRs carry no rationale to capture — drafting from them
+    # would recurse and record the machinery instead of a decision.
+    if: github.event.pull_request.head.ref != 'why-drafts' && github.event.pull_request.head.ref != 'why-anchors'
     runs-on: ubuntu-latest
     permissions:
       contents: write

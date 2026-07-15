@@ -18,24 +18,19 @@ why:
       as_of: 61a4e85
       state: live
     - path: vscode-why/package.json
-      lines: 1-92
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: vscode-why/src/extension.ts
-      lines: 1-282
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: vscode-why/src/core/contract.ts
-      lines: 1-287
       as_of: 61a4e85
       state: live
     - path: vscode-why/src/core/cli-locate.ts
-      lines: 1-53
       as_of: 61a4e85
       state: live
     - path: docs/vscode.md
-      lines: 1-154
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
 ---
 

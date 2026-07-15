@@ -17,26 +17,21 @@ why:
   anchors:
     - path: DESIGN.md
       lines: 178
-      as_of: 58dc0db
-      state: lost
+      as_of: 0f75578
+      state: live
     - path: docs/ui-contract.md
-      lines: 1-287
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: schemas/story.schema.json
-      lines: 1-185
       as_of: 58dc0db
       state: live
     - path: schemas/coverage.schema.json
-      lines: 1-64
       as_of: 58dc0db
       state: live
     - path: schemas/graph.schema.json
-      lines: 1-48
       as_of: 58dc0db
       state: live
     - path: src/export.ts
-      lines: 1-166
       as_of: 58dc0db
       state: live
     - path: src/blame.ts

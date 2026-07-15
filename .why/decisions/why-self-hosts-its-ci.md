@@ -15,23 +15,18 @@ why:
   confidence: recorded
   anchors:
     - path: .github/workflows/why-pr-gate.yml
-      lines: 1-22
       as_of: a735c62
       state: live
     - path: .github/workflows/why-audit.yml
-      lines: 1-55
       as_of: a735c62
       state: live
     - path: .github/workflows/why-capture.yml
-      lines: 1-35
-      as_of: 518bf47
+      as_of: 0f75578
       state: live
     - path: docs/ci.md
-      lines: 1-199
       as_of: a735c62
       state: live
     - path: test/ci.test.ts
-      lines: 1-118
       as_of: a735c62
       state: live
 ---
