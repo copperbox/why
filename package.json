@@ -11,6 +11,10 @@
     "dist",
     "ui"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/copperbox/why.git"
+  },
   "scripts": {
     "why": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
