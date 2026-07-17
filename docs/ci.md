@@ -313,3 +313,188 @@ Digging (docs/digging.md) is an agent-driven, judgment-heavy pass — run it
 deliberately, not on a schedule. The `method: ask` questionnaire loop is the
 same kind of work: the audit job *reports* ask-constraints; answering them is
 an agent session with `why audit --questions-out` / `--answers`.
+
+## Appendix: this repository's package plumbing
+
+The remaining three workflows are not `why` recipes — they are this repo's own
+test/release pipeline for the `@copperbox/why` npm package. Consumers have no
+reason to copy them; they live here so the doc carries every workflow that is
+actually running.
+
+PRs run the typecheck/test/build gate:
+
+`.github/workflows/test.yml`:
+
+```yaml
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run verify
+
+      - run: npm run build
+```
+
+Every push to `main` tags `v<package.json version>` if that tag doesn't exist
+yet, then dispatches the release — explicitly, because tags pushed with
+`GITHUB_TOKEN` never trigger other workflows:
+
+`.github/workflows/tag.yml`:
+
+```yaml
+name: Tag Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # push the version tag
+  actions: write # dispatch the release workflow
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create tag for package version
+        id: tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
+            echo "Tag $TAG already exists; skipping"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Tags pushed with GITHUB_TOKEN don't trigger `on: push: tags` workflows,
+      # so kick off the release explicitly on the new tag.
+      - name: Dispatch release workflow
+        if: steps.tag.outputs.created == 'true'
+        run: gh workflow run release.yml --ref "${{ steps.tag.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+```
+
+The release re-runs the full gate on the tag, verifies the tag matches the
+package version and the tarball contains exactly what it should, then publishes
+to npm via trusted publishing (OIDC) — no token secret:
+
+`.github/workflows/release.yml`:
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Dispatched by tag.yml on the new tag ref, since tags pushed with
+  # GITHUB_TOKEN don't trigger `on: push: tags` workflows.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing (OIDC) + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 bundles npm 10.
+      # Pinned to a major so a new npm major can't change behavior mid-release.
+      # npm 12.0.0 is broken twice over: `pack --json` changed shape, and
+      # `publish --provenance` crashes (sigstore missing from bundled deps).
+      - run: npm install -g npm@11
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+
+      - name: Verify tag matches package version
+        run: |
+          node -e "
+            const v = require('./package.json').version;
+            if (process.env.GITHUB_REF_NAME !== 'v' + v) {
+              console.error('Tag ' + process.env.GITHUB_REF_NAME + ' does not match package.json version ' + v);
+              process.exit(1);
+            }
+          "
+
+      - name: Verify CLI shebang and executable bit
+        run: |
+          head -n 1 dist/cli.js | grep -qx '#!/usr/bin/env node'
+          test -x dist/cli.js
+
+      - name: Verify pack contents
+        run: |
+          node -e "
+            const { execFileSync } = require('child_process');
+            const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+            // npm <= 11 prints an array of results; npm 12 prints an object
+            // keyed by package name.
+            const parsed = JSON.parse(out);
+            const result = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+            const files = result.files.map((f) => f.path);
+            const allowed = (p) => p === 'package.json' || p === 'README.md' || p === 'LICENSE' || p.startsWith('dist/') || p.startsWith('ui/');
+            const unexpected = files.filter((p) => !allowed(p));
+            if (unexpected.length > 0) {
+              console.error('Unexpected files in npm pack:', unexpected);
+              process.exit(1);
+            }
+            if (!files.includes('dist/cli.js')) {
+              console.error('dist/cli.js missing from npm pack');
+              process.exit(1);
+            }
+            if (!files.includes('ui/app.js')) {
+              console.error('ui/app.js missing from npm pack');
+              process.exit(1);
+            }
+            console.log('Pack contents OK (' + files.length + ' files)');
+          "
+
+      # Authenticates via the npm trusted publisher (OIDC) for this repo +
+      # workflow file — no NPM_TOKEN secret involved.
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+```
