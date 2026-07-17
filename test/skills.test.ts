@@ -43,8 +43,9 @@ const IMPLEMENTED_SUBCOMMANDS = new Set([
 ]);
 
 /** snake_case tokens in the docs that are schema fields, example symbols, or
- * GitHub Actions vocabulary, not okf-mcp tool names. */
+ * GitHub Actions / Node vocabulary, not okf-mcp tool names. */
 const NON_TOOL_TOKENS = new Set([
+  "child_process",
   "happened_on",
   "expired_on",
   "as_of",

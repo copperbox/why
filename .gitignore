@@ -5,3 +5,4 @@ dist/
 vscode-why/out/
 vscode-why/.vscode-test/
 .sandcastle/.env
+.why/.obsidian/

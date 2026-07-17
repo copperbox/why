@@ -1,6 +1,6 @@
 {
   "name": "@copperbox/why",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Decision archaeology for codebases — recover, anchor, and audit the why behind code.",
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,10 @@
     "dist",
     "ui"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/copperbox/why.git"
+  },
   "scripts": {
     "why": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
