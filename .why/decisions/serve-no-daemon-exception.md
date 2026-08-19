@@ -18,8 +18,8 @@ why:
       as_of: 61a4e85
       state: live
     - path: DESIGN.md
-      lines: 178-181
-      as_of: 61a4e85
+      lines: 193-196
+      as_of: fa87a3b
       state: live
 ---
 
