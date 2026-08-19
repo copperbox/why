@@ -11,7 +11,7 @@ why:
   confidence: recorded
   anchors:
     - path: .sandcastle/README.md
-      as_of: 44d4118
+      as_of: fa87a3b
       state: live
 ---
 

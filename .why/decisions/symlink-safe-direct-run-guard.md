@@ -15,8 +15,8 @@ why:
   anchors:
     - path: src/cli.ts
       symbol: isDirectRun
-      lines: 645-653
-      as_of: 0f75578
+      lines: 661-669
+      as_of: fa87a3b
       state: live
     - path: test/cli.test.ts
       lines: 73-95

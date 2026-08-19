@@ -14,8 +14,8 @@ why:
   confidence: recorded
   anchors:
     - path: DESIGN.md
-      lines: "179"
-      as_of: 61a4e85
+      lines: 194
+      as_of: fa87a3b
       state: live
     - path: vscode-why/package.json
       as_of: 0f75578
