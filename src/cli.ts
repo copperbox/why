@@ -24,12 +24,24 @@ import { DigStateError, withDigState, type DigRange, type DigRangeOverrides } fr
 import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { buildEvidencePack, EvidenceError, readEpisodes } from "./evidence.js";
 import { buildGraph, buildUiIndex, EXPORT_TARGETS, ExportError } from "./export.js";
-import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet } from "./init.js";
+import { findRepoRoot, InitError, scaffoldBundle, writeCaptureSnippet, writeOkfConfig } from "./init.js";
+import { buildImpactReport, ImpactError, renderImpactReport } from "./impact.js";
 import { lintBundle, renderFindings } from "./lint.js";
+import { buildReviewReport, renderReviewReport } from "./review.js";
 import { ServeError, startWhyServer } from "./serve.js";
 import { AssetError } from "./serve-assets.js";
+import {
+  bootstrapBundle,
+  maintainBundle,
+  renderBootstrapReport,
+  renderMaintainReport,
+  WorkflowError,
+} from "./workflow.js";
 
-export const COMMANDS = ["init", "lint", "blame", "anchor", "doctor", "dig", "audit", "capture", "export", "serve"] as const;
+export const COMMANDS = [
+  "init", "bootstrap", "maintain", "review", "impact",
+  "lint", "blame", "anchor", "doctor", "dig", "audit", "capture", "export", "serve",
+] as const;
 export type Command = (typeof COMMANDS)[number];
 
 /** Where a command's output goes; injectable so tests can capture it. */
@@ -54,6 +66,10 @@ export function usage(): string {
     "",
     "Commands:",
     "  init     scaffold a .why/ bundle in the current repo",
+    "  bootstrap prepare cold-start history and evidence in one run",
+    "  maintain run routine anchoring, audit, health, and inbox checks",
+    "  review   show the consolidated editorial queue or promote a draft",
+    "  impact   show decision context affected by a Git diff",
     "  lint     check the bundle against the why schema (DESIGN.md §3)",
     "  blame    show the decision story behind a file or line range",
     "  anchor   re-resolve code anchors against HEAD",
@@ -68,7 +84,9 @@ export function usage(): string {
     "  --bundle <path>     bundle root to use instead of the nearest .why/",
     "                      (lint also takes the path as a positional: why lint <path>)",
     "  --capture-snippet   (init) add the knowledge-capture block to CLAUDE.md",
-    "  --json              (blame, lint, doctor, dig, audit) emit the results as JSON",
+    "  --full              (bootstrap, dig --episodes) process full history",
+    "  --promote <draft>   (review, capture) lint-gate and promote a draft",
+    "  --json              emit machine-readable results where supported",
     "  --check             (anchor) CI mode — resolve, write nothing, exit 1 on drift",
     "  --concept <id>      (anchor) re-anchor a single concept",
     "  --episodes          (dig) extract commit episodes + tells from git history",
@@ -86,6 +104,104 @@ export function usage(): string {
     "  --out <file>        (export) write the payload to a file instead of stdout",
     "  --port <n>          (serve) port to bind on 127.0.0.1 (default: a random free port)",
   ].join("\n");
+}
+
+async function runBootstrap({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why bootstrap: takes no positional arguments — usage: why bootstrap [--full] [--evidence-dir <dir>] [--max-chars <n>] [--json]");
+    return 2;
+  }
+  let maxChars: number | undefined;
+  if (values["max-chars"] !== undefined) {
+    maxChars = Number(values["max-chars"]);
+    if (!Number.isInteger(maxChars) || maxChars <= 0) {
+      io.err(`why bootstrap: --max-chars must be a positive integer, got "${values["max-chars"]}"`);
+      return 2;
+    }
+  }
+  try {
+    const options: Parameters<typeof bootstrapBundle>[1] = { full: values.full === true };
+    if (values["evidence-dir"] !== undefined) options.evidenceDir = values["evidence-dir"] as string;
+    if (maxChars !== undefined) options.maxChars = maxChars;
+    const report = await bootstrapBundle(bundle!, options);
+    if (values.json === true) io.out(JSON.stringify(report, null, 2));
+    else for (const line of renderBootstrapReport(report)) io.out(line);
+    return 0;
+  } catch (e) {
+    if (e instanceof DigError || e instanceof DigStateError || e instanceof EvidenceError) {
+      io.err(`why bootstrap: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
+async function runMaintain({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why maintain: takes no positional arguments — usage: why maintain [--json]");
+    return 2;
+  }
+  try {
+    const report = await maintainBundle(bundle!);
+    if (values.json === true) io.out(JSON.stringify(report, null, 2));
+    else for (const line of renderMaintainReport(report)) io.out(line);
+    return report.healthy ? 0 : 1;
+  } catch (e) {
+    if (e instanceof AnchorError || e instanceof AuditError || e instanceof WorkflowError) {
+      io.err(`why maintain: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
+async function runReview({ values, positionals, bundle, cwd, io }: CommandContext): Promise<number> {
+  if (positionals.length > 0) {
+    io.err("why review: takes no positional arguments — usage: why review [--promote <draft>] [--json]");
+    return 2;
+  }
+  try {
+    let promotedPath: string | null = null;
+    if (values.promote !== undefined) {
+      const promoted = await promoteDraft(bundle!, values.promote as string, cwd);
+      if (!promoted.promoted) {
+        io.err(`why review: promotion refused — ${promoted.path} fails lint, draft kept`);
+        return 1;
+      }
+      promotedPath = promoted.path;
+      if (values.json !== true) io.out(`promoted → ${promoted.path}`);
+      bundle = await loadBundle(bundle!.root);
+    }
+    const report = await buildReviewReport(bundle!);
+    if (values.json === true) io.out(JSON.stringify({ promoted: promotedPath, review: report }, null, 2));
+    else for (const line of renderReviewReport(report)) io.out(line);
+    return 0;
+  } catch (e) {
+    if (e instanceof CaptureError) {
+      io.err(`why review: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
+}
+
+async function runImpact({ values, positionals, bundle, io }: CommandContext): Promise<number> {
+  if (positionals.length > 1) {
+    io.err("why impact: expected at most one Git range — usage: why impact [<base>..<head>] [--json]");
+    return 2;
+  }
+  try {
+    const report = buildImpactReport(bundle!, positionals[0]);
+    if (values.json === true) io.out(JSON.stringify(report, null, 2));
+    else for (const line of renderImpactReport(report)) io.out(line);
+    return 0;
+  } catch (e) {
+    if (e instanceof ImpactError) {
+      io.err(`why impact: ${e.message}`);
+      return 1;
+    }
+    throw e;
+  }
 }
 
 interface CommandContext {
@@ -115,15 +231,26 @@ async function runInit({ values, cwd, io }: CommandContext): Promise<number> {
   try {
     const repoRoot = findRepoRoot(cwd);
     const root = await scaffoldBundle(repoRoot);
-    const name = basename(repoRoot);
     io.out(`Initialized empty why bundle at ${root}`);
+    try {
+      const config = await writeOkfConfig(repoRoot);
+      io.out(`okf.config.json: bundle mount ${config}`);
+      if (config === "conflict") {
+        io.out("  warning: the project-name bundle id already points elsewhere; add a separate .why mount before starting okf-mcp");
+      }
+    } catch (error) {
+      // The archive is already valid and must not be reported as a failed
+      // initialization merely because an unrelated config needs hand repair.
+      io.out(`okf.config.json: not updated (${(error as Error).message})`);
+    }
     if (values["capture-snippet"] === true) {
       io.out(`CLAUDE.md: capture snippet ${await writeCaptureSnippet(repoRoot)}`);
     }
     io.out("");
     io.out("Next steps:");
-    io.out(`  - serve it to agents:   npx -y @copperbox/okf-mcp --bundle ${name}=.why --writable`);
-    io.out("  - recover the backstory: why dig  (see docs/digging.md)");
+    io.out("  - serve it to agents:   npx -y @copperbox/okf-mcp@^1.3.0");
+    io.out("    (if the server is already running, call reload_bundles once)");
+    io.out("  - recover the backstory: why bootstrap  (see docs/digging.md)");
     return 0;
   } catch (e) {
     if (e instanceof InitError) {
@@ -519,6 +646,32 @@ const COMMAND_SPECS: Record<Command, CommandSpec> = {
     options: { "capture-snippet": { type: "boolean" } },
     needsBundle: false,
     run: runInit,
+  },
+  bootstrap: {
+    options: {
+      ...BUNDLE_OPTIONS,
+      full: { type: "boolean" },
+      "evidence-dir": { type: "string" },
+      "max-chars": { type: "string" },
+      json: { type: "boolean" },
+    },
+    needsBundle: true,
+    run: runBootstrap,
+  },
+  maintain: {
+    options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },
+    needsBundle: true,
+    run: runMaintain,
+  },
+  review: {
+    options: { ...BUNDLE_OPTIONS, promote: { type: "string" }, json: { type: "boolean" } },
+    needsBundle: true,
+    run: runReview,
+  },
+  impact: {
+    options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },
+    needsBundle: true,
+    run: runImpact,
   },
   lint: {
     options: { ...BUNDLE_OPTIONS, json: { type: "boolean" } },

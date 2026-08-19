@@ -16,7 +16,7 @@ why:
   confidence: recorded
   anchors:
     - path: DESIGN.md
-      lines: 193
+      lines: 194
       as_of: fa87a3b
       state: live
     - path: docs/ui-contract.md
@@ -49,7 +49,7 @@ Recorded in the PR's "What & why" [1]. A stable, versioned contract lets the UIs
 
 # Because of
 
-- [Consumption before archaeology](/decisions/consumption-before-archaeology.md)
+- [Consumption before archaeology](consumption-before-archaeology.md)
 
 # Citations
 

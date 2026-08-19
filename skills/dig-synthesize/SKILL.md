@@ -13,7 +13,7 @@ inside one episode. Your input is the bundle as those runs left it — read it
 through okf-mcp; the same mount the dig runs used:
 
 ```bash
-npx -y @copperbox/okf-mcp --bundle <repo-name>=.why --writable
+npx -y @copperbox/okf-mcp@^1.3.0
 ```
 
 ## The contract — non-negotiable

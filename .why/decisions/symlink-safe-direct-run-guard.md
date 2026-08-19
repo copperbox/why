@@ -34,7 +34,7 @@ Recorded in the guard's own comment and the regression test at the time [2]. `im
 
 # Because of
 
-- [The VS Code extension is a standalone package that shells out to the CLI](/decisions/vscode-extension-standalone.md)
+- [The VS Code extension is a standalone package that shells out to the CLI](vscode-extension-standalone.md)
 
 # Citations
 

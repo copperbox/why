@@ -5,7 +5,7 @@
 // two. Schemas live in schemas/ and are validated against real outputs in
 // test/ui-contract.test.ts.
 
-import { deriveTitle } from "@copperbox/okf-mcp";
+import { deriveTitle } from "./okf.js";
 import { indexedConcept, type AnchorIndex, type LineRange } from "./anchors.js";
 import { glyphFor, type Glyph } from "./blame.js";
 import type { Confidence, WhyBundle } from "./bundle.js";

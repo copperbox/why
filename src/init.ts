@@ -6,9 +6,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { appendLogEntry, OKF_VERSION, serializeDocument } from "@copperbox/okf-mcp";
+import { appendLogEntry, OKF_VERSION } from "@copperbox/okf-mcp";
 import { CONCEPT_TYPES } from "./bundle.js";
 import { BUNDLE_DIRNAME } from "./discover.js";
+import { serializeDocument } from "./okf.js";
 
 /** An init step that must stop the command cleanly (exit 1), not crash. */
 export class InitError extends Error {}
@@ -18,6 +19,7 @@ export const TYPE_DIRECTORIES = CONCEPT_TYPES.map((type) => `${type}s`);
 
 export const SNIPPET_BEGIN = "<!-- why:begin -->";
 export const SNIPPET_END = "<!-- why:end -->";
+export const OKF_CONFIG_FILENAME = "okf.config.json";
 
 /** Root of the git repo enclosing `cwd`; the bundle always lives at its top. */
 export function findRepoRoot(cwd: string): string {
@@ -64,6 +66,59 @@ export async function scaffoldBundle(repoRoot: string): Promise<string> {
   return root;
 }
 
+/**
+ * Register the archive with okf-mcp's project config. Existing unrelated
+ * settings and bundle mounts survive; a conflicting mount is left untouched
+ * so init never silently redirects a user's knowledge source.
+ */
+export async function writeOkfConfig(
+  repoRoot: string,
+): Promise<"created" | "updated" | "present" | "conflict"> {
+  const configPath = join(repoRoot, OKF_CONFIG_FILENAME);
+  const bundleId = basename(repoRoot);
+  let config: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(await readFile(configPath, "utf8"));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new InitError(`why init: ${configPath} must contain a JSON object`);
+    }
+    config = parsed as Record<string, unknown>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if (error instanceof InitError) throw error;
+      throw new InitError(`why init: cannot update ${configPath}: ${(error as Error).message}`);
+    }
+    config = {};
+  }
+  const bundlesValue = config.bundles;
+  if (bundlesValue !== undefined && !isRecord(bundlesValue)) {
+    throw new InitError(`why init: ${configPath} \"bundles\" must be a JSON object`);
+  }
+  const bundles = { ...(bundlesValue as Record<string, unknown> | undefined) };
+  const existing = bundles[bundleId];
+  if (existing !== undefined) {
+    const existingPath = typeof existing === "string" ? existing : isRecord(existing) ? existing.path : undefined;
+    if (existingPath !== BUNDLE_DIRNAME) return "conflict";
+    if (isRecord(existing) && existing.writable === false) return "conflict";
+    if (isRecord(existing) && existing.writable === true) return "present";
+    bundles[bundleId] = isRecord(existing)
+      ? { ...existing, writable: true }
+      : { path: BUNDLE_DIRNAME, writable: true };
+    config.bundles = bundles;
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    return "updated";
+  }
+  bundles[bundleId] = { path: BUNDLE_DIRNAME, writable: true };
+  config.bundles = bundles;
+  const result = Object.keys(config).length === 1 && Object.keys(bundles).length === 1 ? "created" : "updated";
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  return result;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 /** The knowledge-capture block dropped into CLAUDE.md (DESIGN.md §8). */
 export function captureSnippet(repoName: string): string {
   return [
@@ -74,8 +129,8 @@ export function captureSnippet(repoName: string): string {
     "decisions, constraints, attempts, incidents, and open questions.",
     "",
     "- Before non-trivial work, consult the archive for the decisions and",
-    "  constraints shaping the code you are about to change (mount it:",
-    `  \`npx -y @copperbox/okf-mcp --bundle ${repoName}=.why --writable\`).`,
+    "  constraints shaping the code you are about to change. okf-mcp loads",
+    `  the \`${repoName}\` bundle from the repo's \`okf.config.json\`.`,
     "- After making a durable decision — choosing an approach, ruling one out,",
     "  hitting a constraint — record it in `.why/` while the context is fresh.",
     SNIPPET_END,

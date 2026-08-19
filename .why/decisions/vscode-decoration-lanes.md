@@ -51,7 +51,7 @@ The shape follows from that. The lanes are separate decoration types because a s
 
 # Because of
 
-- [The VS Code extension is a standalone package that shells out to the CLI](/decisions/vscode-extension-standalone.md)
+- [The VS Code extension is a standalone package that shells out to the CLI](vscode-extension-standalone.md)
 
 # Citations
 

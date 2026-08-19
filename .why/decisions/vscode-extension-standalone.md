@@ -44,7 +44,7 @@ Recorded in the PR's "What & why" and DESIGN.md §8 [1][2]. Like `serve`, the ex
 
 # Because of
 
-- [The UI ⇄ backend boundary is a versioned JSON data contract](/decisions/ui-data-contract.md)
+- [The UI ⇄ backend boundary is a versioned JSON data contract](ui-data-contract.md)
 
 # Citations
 

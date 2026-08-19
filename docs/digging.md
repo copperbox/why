@@ -4,6 +4,12 @@ The end-to-end sequence for recovering a `.why/` bundle from history
 (DESIGN.md §6). Judgment lives in agent prompts; everything deterministic
 lives in the CLI:
 
+For normal use, `why bootstrap [--evidence-dir <exports>]` performs steps 1–2
+for the incremental range and writes an ordered `HANDOFF.md`; after completing
+that handoff, `why maintain` performs step 5 plus lint, audit, health, and inbox
+checks. The commands below are the lower-level interfaces for controlling each
+stage independently.
+
 | Step | What | Runs as |
 |---|---|---|
 | 1 | Episode extraction | `why dig --episodes` (deterministic) |
@@ -19,7 +25,7 @@ lives in the CLI:
   without it, packs degrade to explicit `[unavailable: …]` markers and the
   dig agents simply have less to cite (they never fetch on their own).
 - For steps 3–4, an agent session with the bundle mounted writable:
-  `npx -y @copperbox/okf-mcp --bundle <repo-name>=.why --writable`, and the
+  `npx -y @copperbox/okf-mcp@^1.3.0` (the repo config mounts `.why` writable), and the
   relevant skill loaded (in Claude Code, install `skills/dig` and
   `skills/dig-synthesize` as project skills and invoke them per pack/batch).
 

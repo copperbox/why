@@ -2,7 +2,7 @@
 
 This is the source of truth for the knowledge schema and the three tools built on it. When implementation and this document disagree, one of them is a bug; fix whichever is wrong and record the decision as a `decision` concept in [.why/](.why/index.md).
 
-`why` is a schema and toolset **on top of** OKF v0.1 — every bundle is a valid OKF bundle first, and everything `why`-specific lives in (a) the `why:` frontmatter extension map, (b) link-section conventions, and (c) external tooling. A plain okf-mcp server can serve a `why` bundle with zero changes; `why`'s own tools add the semantics.
+`why` is a schema and toolset **on top of** OKF v0.2 (with v0.1 read/write compatibility) — every bundle is a valid OKF bundle first, and everything `why`-specific lives in (a) the `why:` frontmatter extension map, (b) link-section conventions, and (c) external tooling. A plain okf-mcp server can serve a `why` bundle with zero changes; `why`'s own tools add the semantics.
 
 ## 1. The bundle
 
@@ -19,11 +19,11 @@ Lives at `.why/` in the target repo (default; configurable to a sibling repo for
 └── questions/<slug>.md
 ```
 
-Folder = concept type, one idea per file, slugs are short and kebab-case (`queue-based-locking.md`, not `decision-to-switch-to-queue-based-locking-2024.md`). Links are bundle-absolute (`/constraints/acme-45s-timeout.md`).
+Folder = concept type, one idea per file, slugs are short and kebab-case (`queue-based-locking.md`, not `decision-to-switch-to-queue-based-locking-2024.md`). Links are document-relative (`../constraints/acme-45s-timeout.md`) so published subdirectory bundles remain portable.
 
 ## 2. Frontmatter
 
-Standard OKF keys (`type`, `title`, `description`, `tags`, `timestamp`) plus one extension map, `why:`. Namespacing everything under one key keeps us collision-proof against future OKF versions; OKF preserves unknown keys, so plain okf-mcp round-trips it byte-for-byte.
+Standard OKF keys (`type`, `title`, `description`, `tags`, `generated`, `sources`, `verified`, `stale_after`) plus one extension map, `why:`. Namespacing everything under one key keeps us collision-proof against future OKF versions; OKF preserves unknown keys, so plain okf-mcp round-trips it byte-for-byte. Legacy v0.1 `timestamp` and `# Citations` remain readable.
 
 ```yaml
 ---
@@ -31,10 +31,15 @@ type: decision
 title: Queue-based locking
 description: Serialize shard access through a queue instead of striped RwLocks.
 tags: [locking, concurrency]
-timestamp: 2026-07-11        # when this concept was last written — OKF-standard
+generated:                   # when/by whom this concept was last written
+  by: human:maintainer
+  at: 2026-07-11T00:00:00Z
 why:
   status: active             # see per-type status vocab below
   happened_on: 2024-03-14    # when the decision/incident/attempt happened
+  owner: "@platform"          # optional editorial owner
+  captured_on: 2026-07-11    # optional: when it entered the review queue
+  review_by: 2026-07-25      # optional editorial deadline
   confidence: corroborated   # recorded | corroborated | inferred | speculative
   anchors:
     - path: src/lock.rs
@@ -56,6 +61,9 @@ why:
 | `anchors` | ✓ | optional | optional | optional | ✓ |
 | `verify` | — | ✓ (see §5) | — | — | — |
 | `expired_on` | — | ✓ when expired | — | — | — |
+| `owner` | optional | optional | optional | optional | optional |
+| `captured_on` | optional | optional | optional | optional | optional |
+| `review_by` | optional | optional | optional | optional | optional |
 
 ### The confidence ladder
 
@@ -86,12 +94,12 @@ the reasoning. Written for the engineer who just ran `why blame` on this code.
 
 # Because of
 
-- [2024-03 lock stall](/incidents/2024-03-lock-stall.md)
-- [Acme 45s gateway timeout](/constraints/acme-45s-timeout.md)
+- [2024-03 lock stall](../incidents/2024-03-lock-stall.md)
+- [Acme 45s gateway timeout](../constraints/acme-45s-timeout.md)
 
 # Instead of
 
-- [Striped RwLock](/attempts/striped-rwlock.md) — deadlocked under load
+- [Striped RwLock](../attempts/striped-rwlock.md) — deadlocked under load
 
 # Citations
 
@@ -187,10 +195,26 @@ Priority order for a cold-start dig (usefulness per token): tells first, then th
 
 Same data over MCP: agents mount the bundle via okf-mcp and get story-of-this-code by `search_concepts` with a `resource`/anchor filter. If that proves clumsy in practice, Phase 5 considers a thin `why-mcp` wrapper exposing `blame` as a first-class tool; default is to not build it.
 
+### Outcome-oriented interfaces
+
+- `why bootstrap` composes episode extraction and evidence assembly into one
+  atomic cold-start workspace and an ordered agent handoff. It does not call an
+  LLM: rationale reconstruction remains the explicit judgment seam.
+- `why maintain` composes lint, anchor writes, audit, doctor, and inbox summary
+  on the integration branch.
+- `why review` is the consolidated editorial queue for drafts, open questions,
+  ownership/deadlines, and maintenance findings; it also exposes lint-gated
+  promotion.
+- `why impact [<git-range>]` maps a diff to exact-hunk and same-file concepts,
+  then reports only expired constraints causally upstream of those concepts.
+
+Their contracts and operational behavior are specified in
+[docs/workflows.md](docs/workflows.md).
+
 ## 8. Implementation shape
 
 - **Language:** TypeScript (Node), matching okf-mcp; depends on okf-mcp as a library where possible rather than shelling out.
-- **CLI:** `why dig | anchor | audit | blame | capture | lint | doctor | export | init | serve`. `why init` scaffolds `.why/`, writes the root `index.md` frontmatter, and drops a CLAUDE.md snippet teaching resident agents to consult and maintain the bundle. `why capture` (open problem #5's pipeline) drafts a concept from a merged PR into `.why/.drafts/` — a dot-directory, so drafts never serve — and lint-gates promotion out of it. `why export` (with `why blame --json`) emits the versioned UI data contract — story, coverage, graph — that every presentation layer renders from without re-deriving semantics ([docs/ui-contract.md](docs/ui-contract.md)).
+- **CLI:** outcome interfaces are `why bootstrap | maintain | review | impact`; lower-level interfaces are `why dig | anchor | audit | blame | capture | lint | doctor | export`, plus `init | serve`. `why init` scaffolds `.why/`, writes the root `index.md` frontmatter, and drops a CLAUDE.md snippet teaching resident agents to consult and maintain the bundle. `why capture` drafts a concept from a merged PR into `.why/.drafts/` — a dot-directory, so drafts never serve — and lint-gates promotion out of it. `why export` (with `why blame --json`) emits the versioned UI data contract — story, coverage, graph — that every presentation layer renders from without re-deriving semantics ([docs/ui-contract.md](docs/ui-contract.md)).
 - **UI surfaces:** two, both dumb renderers of the contract payloads with zero engine logic of their own. `why serve` is a read-only, localhost-only viewer (blame gutter, story panel, graph) whose endpoints wrap the same library calls the CLI uses; the `vscode-why/` extension shells out to the `why` CLI and renders coverage decorations, hovers, and story webviews from the same JSON. If either surface needs data the contract lacks, the contract is extended first.
 - **Agent integration:** dig/audit agent prompts ship as Claude Code skills in `skills/`; the CLI's `--episodes`/`--evidence` subcommands are the deterministic tools those skills call.
 - **No daemon.** No resident process is ever required: the pipeline is run-to-completion commands suitable for CI (`why anchor --check` and `why lint` as PR gates; `why audit` weekly). `why serve` is the one deliberate exception — an optional, foreground, localhost-only viewer the user starts and stops by hand; nothing in the pipeline depends on it.
@@ -203,4 +227,4 @@ Tracked honestly. These are the questions v1 does not settle.
 2. **Hallucination pressure at scale.** One agent per episode with citation requirements is the design; does it hold when episodes are thin (terse commit messages, no PRs)? May need an adversarial verify pass — a second agent trying to refute each ≥`inferred` claim. *Phase 3 measures on a real repo before adding cost.*
 3. **Evidence access.** PRs and issues are reachable via `gh`; Slack/Discord/docs often hold the best rationale and are org-specific. v1 accepts an `--evidence-dir` of exported text as the escape hatch; connectors are post-v1.
 4. **Bundle scale.** Hundreds of concepts: fine (lexical search, in-memory graph). Org-wide multi-repo archives: needs okf-mcp multi-bundle mounts (already supported) and maybe semantic search bolted alongside. Explicitly deferred; single-repo is the product until it's excellent.
-5. **The write-back loop.** Digging history is the cold start; the steady state should be *capture at decision time* — a `why` PR-merge hook that drafts a concept from the PR discussion while context is fresh, confidence `recorded`. Cheapest data, best data. *Phase 4.*
+5. **Trust, scale, and evidence security.** Claim-level confidence, product-quality evaluation, warning scope, evidence retention/check execution, and human-confirmed successor anchors remain open. They are scoped for later design work in [docs/future-improvements.md](docs/future-improvements.md).

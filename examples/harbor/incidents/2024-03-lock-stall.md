@@ -26,7 +26,7 @@ The on-call annotation "we got lucky in Feb — same signature, self-resolved" u
 
 # Led to
 
-- [Queue-based locking](/decisions/queue-based-locking.md)
+- [Queue-based locking](../decisions/queue-based-locking.md)
 
 # Citations
 

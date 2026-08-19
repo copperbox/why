@@ -16,13 +16,13 @@ The original dispatch-locking design: one RwLock per shard stripe, readers for d
 
 # Why
 
-It was the textbook answer and benchmarked well [1]. The failure mode wasn't performance — it was lock-ordering discipline across independently evolving call sites. Two orderings crept in via separate PRs ([2], [3]), each locally reasonable, jointly deadlock-prone. The [2024-03 stall](/incidents/2024-03-lock-stall.md) was the bill.
+It was the textbook answer and benchmarked well [1]. The failure mode wasn't performance — it was lock-ordering discipline across independently evolving call sites. Two orderings crept in via separate PRs ([2], [3]), each locally reasonable, jointly deadlock-prone. The [2024-03 stall](../incidents/2024-03-lock-stall.md) was the bill.
 
 The durable lesson recorded in the replacement PR: *"any scheme where correctness depends on every future contributor acquiring locks in the same order is a scheme that fails eventually"* [4]. That sentence is why the fix was a redesign, not an ordering audit.
 
 # Led to
 
-- [2024-03 lock stall](/incidents/2024-03-lock-stall.md)
+- [2024-03 lock stall](../incidents/2024-03-lock-stall.md)
 
 # Citations
 

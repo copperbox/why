@@ -4,7 +4,8 @@
 // claim that no longer holds, so it never matches: anchors are live or lost,
 // never silently wrong.
 
-import { deriveTitle, extractCitations } from "@copperbox/okf-mcp";
+import { conceptSources } from "@copperbox/okf-mcp";
+import { deriveTitle } from "./okf.js";
 import {
   buildAnchorIndex,
   indexedConcept,
@@ -145,8 +146,12 @@ function edgesIn(bundle: WhyBundle, concept: WhyConcept, section: string): Blame
 }
 
 function citationsOf(bundle: WhyBundle, concept: WhyConcept): BlameCitation[] {
-  const { citations } = extractCitations(concept.body, concept.path, (id) => bundle.concepts.has(id));
-  return citations.map((c) => ({ label: c.text, url: c.target }));
+  const okfConcept = bundle.okf.concepts.get(concept.id);
+  if (okfConcept === undefined) return [];
+  return conceptSources(okfConcept).sources.map((source) => ({
+    label: typeof source.title === "string" ? source.title : source.id ?? source.resource,
+    url: source.resource,
+  }));
 }
 
 /** `PR #212: replace striped locks…` reads as `PR #212` on one evidence line. */

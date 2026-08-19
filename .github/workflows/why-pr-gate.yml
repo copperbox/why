@@ -26,3 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run why -- lint
       - run: npm run why -- anchor --check --allow-drift
+      - name: decision impact summary
+        run: |
+          npm run --silent why -- impact "origin/${{ github.base_ref }}...HEAD" | tee why-impact.txt
+          cat why-impact.txt >> "$GITHUB_STEP_SUMMARY"

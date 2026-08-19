@@ -15,7 +15,7 @@ okf-mcp write tools, every one of them passing `why lint` before you finish.
 The bundle is mounted writable:
 
 ```bash
-npx -y @copperbox/okf-mcp --bundle <repo-name>=.why --writable
+npx -y @copperbox/okf-mcp@^1.3.0
 ```
 
 ## The contract — non-negotiable
@@ -26,9 +26,10 @@ npx -y @copperbox/okf-mcp --bundle <repo-name>=.why --writable
    a `[clipped: …]` marker means the rest was cut. What you cannot see, you
    cannot cite; what you cannot cite, you cannot claim.
 2. **Cite everything.** Every claim in a narrative traces to a specific item
-   in the pack — a commit, a PR/issue comment, a local evidence file. Any
-   concept at confidence `inferred` or above **must** carry a `# Citations`
-   section pointing at those items.
+   in the pack — a commit, a PR/issue comment, a local evidence file. In v0.2,
+   record those items in `sources` and attach claims with matching footnotes;
+   in a legacy v0.1 bundle, use `# Citations`. Any concept at confidence
+   `inferred` or above must carry that evidence.
 3. **Never assert rationale above its evidence.** Assign confidence from the
    ladder below, bottom-up from what the citations actually support — never
    from how plausible the story feels.
@@ -81,7 +82,8 @@ One concept per file, under the directory matching its type:
 `decisions/`, `constraints/`, `attempts/`, `incidents/`, `questions/`.
 Slugs are short kebab-case (`queue-based-locking.md`, not
 `decision-to-switch-to-queue-based-locking-2024.md`). Links between concepts
-are bundle-absolute (`/constraints/acme-45s-timeout.md`).
+are document-relative (`../constraints/acme-45s-timeout.md`) so they remain
+valid when the bundle is published below a repository path.
 
 Frontmatter template — standard OKF keys plus everything `why`-specific
 namespaced under the single `why:` map (write nothing why-specific outside
@@ -106,7 +108,7 @@ why:
 ---
 ```
 
-Do not set `timestamp` — the write tools stamp it. Per-type fields:
+Do not set `generated` or legacy `timestamp` — the write tools stamp provenance in the bundle's declared vocabulary. In OKF v0.2 bundles, put evidence in frontmatter `sources` and cite claims with matching `[^source-id]` footnotes; use legacy `# Citations` only when extending a v0.1 bundle. Per-type fields:
 
 | Field | decision | constraint | attempt | incident | question |
 |---|---|---|---|---|---|

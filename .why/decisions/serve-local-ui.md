@@ -39,8 +39,8 @@ Recorded in the PR's "What & why" and DESIGN.md §8, amended in the same diff [1
 
 # Because of
 
-- [The UI ⇄ backend boundary is a versioned JSON data contract](/decisions/ui-data-contract.md)
-- [`why blame` warns on every expired constraint](/decisions/blame-warns-on-every-expired-constraint.md)
+- [The UI ⇄ backend boundary is a versioned JSON data contract](ui-data-contract.md)
+- [`why blame` warns on every expired constraint](blame-warns-on-every-expired-constraint.md)
 
 # Citations
 

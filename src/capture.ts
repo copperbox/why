@@ -12,8 +12,9 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { serializeDocument, splitFrontmatter, writeConcept } from "@copperbox/okf-mcp";
+import { bundleVocabulary, writeConcept } from "@copperbox/okf-mcp";
 import type { ConceptFrontmatter } from "@copperbox/okf-mcp";
+import { extractSection, removeSection, serializeDocument, splitFrontmatter } from "./okf.js";
 import { parseLineRange, type LineRange } from "./anchors.js";
 import { CONCEPT_TYPES, isOneOf, isPlainMap, loadBundle, type WhyBundle } from "./bundle.js";
 import {
@@ -62,6 +63,8 @@ export interface CaptureResult {
 export interface CaptureOptions {
   /** Injectable so tests answer gh from fixtures and never hit the network. */
   runner?: CommandRunner;
+  /** Capture time for queue metadata; injectable for deterministic tests. */
+  now?: Date;
 }
 
 // --- Anchors from the diff's hunks --------------------------------------------
@@ -289,12 +292,17 @@ async function emitDraft(
 function whyMap(opts: {
   status: string;
   happenedOn?: string;
+  capturedOn: string;
+  owner?: string;
   candidateCount: number;
   anchors: CapturedAnchor[];
   notes: string[];
 }): Record<string, unknown> {
   const why: Record<string, unknown> = { status: opts.status };
   if (opts.happenedOn !== undefined) why.happened_on = opts.happenedOn;
+  why.captured_on = opts.capturedOn;
+  why.review_by = plusDays(opts.capturedOn, 14);
+  if (opts.owner !== undefined && opts.owner !== "") why.owner = opts.owner;
   if (opts.candidateCount > 0) {
     // Verbatim human-written rationale from the time of the change is the
     // `recorded` bar; the promotion step confirms the kept quotes state it.
@@ -306,6 +314,16 @@ function whyMap(opts: {
   }
   if (opts.anchors.length > 0) why.anchors = opts.anchors;
   return why;
+}
+
+function isoDate(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+function plusDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return isoDate(value);
 }
 
 function asString(v: unknown): string | undefined {
@@ -327,6 +345,7 @@ export async function capturePr(
   options: CaptureOptions = {},
 ): Promise<CaptureResult> {
   const runner = options.runner ?? runCommand;
+  const capturedOn = isoDate(options.now ?? new Date());
   const repo = dirname(bundle.root);
   const r = runner("gh", ["pr", "view", String(n), "--json", PR_FIELDS], repo);
   if (r.status === 127) {
@@ -423,6 +442,8 @@ export async function capturePr(
     anchors,
     notes,
     happenedOn,
+    capturedOn,
+    owner: author === "unknown" ? undefined : `@${author}`,
   });
   const frontmatter: Record<string, unknown> = {
     type,
@@ -473,6 +494,7 @@ export async function captureCommit(
   options: CaptureOptions = {},
 ): Promise<CaptureResult> {
   const runner = options.runner ?? runCommand;
+  const capturedOn = isoDate(options.now ?? new Date());
   const repo = dirname(bundle.root);
   const verify = runner("git", ["rev-parse", "--verify", `${ref}^{commit}`], repo);
   if (verify.status !== 0) {
@@ -480,11 +502,11 @@ export async function captureCommit(
   }
   const sha = verify.stdout.trim();
   const sha7 = sha.slice(0, 7);
-  const shown = runner("git", ["show", "-s", "--format=%as%n%B", sha], repo);
+  const shown = runner("git", ["show", "-s", "--format=%as%n%ae%n%B", sha], repo);
   if (shown.status !== 0) {
     throw new CaptureError(`git show ${sha} failed: ${firstLine(shown.stderr)}`);
   }
-  const [date, subject, ...rest] = shown.stdout.split("\n");
+  const [date, authorEmail, subject, ...rest] = shown.stdout.split("\n");
   const messageBody = rest.join("\n").trim();
   const title = subject?.trim() || `commit ${sha7}`;
   const happenedOn = asString(date?.trim());
@@ -517,6 +539,8 @@ export async function captureCommit(
     anchors: derived.anchors,
     notes,
     happenedOn,
+    capturedOn,
+    owner: asString(authorEmail?.trim()),
   });
   const frontmatter: Record<string, unknown> = {
     type: "decision",
@@ -591,9 +615,18 @@ export async function promoteDraft(bundle: WhyBundle, ref: string, cwd: string):
     );
   }
   const relPath = `${type}s/${basename(draftPath)}`;
+  const vocabulary = bundleVocabulary(bundle.okf);
+  const frontmatter = { ...split.data } as ConceptFrontmatter;
+  let body = split.body;
+  if (vocabulary === "0.2" && frontmatter.sources === undefined) {
+    const sources = legacyCitationSources(body);
+    if (sources.length > 0) frontmatter.sources = sources;
+    body = removeSection(body, "Citations");
+  }
   try {
-    await writeConcept(bundle.root, relPath, split.data as ConceptFrontmatter, split.body, {
+    await writeConcept(bundle.root, relPath, frontmatter, body, {
       failIfExists: true,
+      vocabulary,
     });
   } catch (e) {
     throw new CaptureError(`cannot promote to ${relPath}: ${e instanceof Error ? e.message : String(e)}`);
@@ -607,4 +640,14 @@ export async function promoteDraft(bundle: WhyBundle, ref: string, cwd: string):
   await rm(draftPath);
   await rm(draftPath.replace(/\.md$/, EVIDENCE_SUFFIX), { force: true });
   return { promoted: true, path: relPath, findings };
+}
+
+/** Lift capture's own well-formed v0.1 citation lines for a v0.2 promotion. */
+function legacyCitationSources(body: string): Array<{ id: string; title: string; resource: string }> {
+  const section = extractSection(body, "Citations")?.content ?? "";
+  const sources: Array<{ id: string; title: string; resource: string }> = [];
+  for (const match of section.matchAll(/^\[(\d+)\]\s+\[([^\]]+)\]\(([^)\s]+)\)/gm)) {
+    sources.push({ id: `source-${match[1]}`, title: match[2]!, resource: match[3]! });
+  }
+  return sources;
 }

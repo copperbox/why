@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-08-17
+* Repair sweep (okf-mcp repair): absolute-links-to-relative (14 files)
+
 ## 2026-07-15
 * re-point anchor: repairStamp renamed to repairOrphan (call-site const made the symbol ambiguous to the grep resolver)
 * retitle: drop brackets from title so the generated index bullet stays lintable (W001)

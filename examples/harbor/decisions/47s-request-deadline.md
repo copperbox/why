@@ -25,15 +25,15 @@ why:
 
 # Why
 
-Set two seconds *past* the [Acme gateway's 45s kill](/constraints/acme-45s-timeout.md), deliberately: if our deadline fired first, Acme's gateway saw a clean error and retried immediately, doubling load during slowdowns. Letting *their* timeout fire first meant their retry logic backed off instead. The 2s margin covers clock skew and gateway jitter.
+Set two seconds *past* the [Acme gateway's 45s kill](../constraints/acme-45s-timeout.md), deliberately: if our deadline fired first, Acme's gateway saw a clean error and retried immediately, doubling load during slowdowns. Letting *their* timeout fire first meant their retry logic backed off instead. The 2s margin covers clock skew and gateway jitter.
 
 Confidence is `corroborated` rather than `recorded`: the commit message says only "bump deadline 30→47s for Acme" [1], but the linked issue thread contains the fire-first reasoning [2], and the two agree.
 
-**⚠ Upstream constraint expired.** The [Acme constraint](/constraints/acme-45s-timeout.md) ended 2025-06-30. Nothing else is known to depend on the specific value 47. This decision is candidate scar tissue: the deadline could likely revert to a value chosen on our own merits. Filed for review — an audit should confirm no other customer inherited a similar cap before changing it.
+**⚠ Upstream constraint expired.** The [Acme constraint](../constraints/acme-45s-timeout.md) ended 2025-06-30. Nothing else is known to depend on the specific value 47. This decision is candidate scar tissue: the deadline could likely revert to a value chosen on our own merits. Filed for review — an audit should confirm no other customer inherited a similar cap before changing it.
 
 # Because of
 
-- [Acme 45s gateway timeout](/constraints/acme-45s-timeout.md)
+- [Acme 45s gateway timeout](../constraints/acme-45s-timeout.md)
 
 # Citations
 

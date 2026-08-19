@@ -24,7 +24,7 @@ Recorded at project bootstrap [1]: section conventions keep bundles valid OKF an
 
 # Because of
 
-- [OKF/okf-mcp as the substrate](/decisions/okf-as-substrate.md)
+- [OKF/okf-mcp as the substrate](okf-as-substrate.md)
 
 # Citations
 

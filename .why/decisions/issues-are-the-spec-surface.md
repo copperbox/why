@@ -25,7 +25,7 @@ Recorded at project bootstrap [1]: the pipeline's implementers and the gate both
 
 # Because of
 
-- [Autonomous build via Sandcastle + gatekeeper](/decisions/autonomous-build-via-sandcastle.md)
+- [Autonomous build via Sandcastle + gatekeeper](autonomous-build-via-sandcastle.md)
 
 # Citations
 
