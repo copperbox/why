@@ -50,7 +50,7 @@ Three layers, deliberately separable:
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The bundle is the center of gravity, and it is **not a new format**: it's [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) markdown served by [okf-mcp](../okf-mcp). `why` adds a schema on top (concept types, a `why:` frontmatter extension, link-section conventions) plus the tooling OKF deliberately doesn't provide: code anchoring, constraint auditing, and the archaeology pipeline. See [DESIGN.md](DESIGN.md) for the full schema.
+The bundle is the center of gravity, and it is **not a new format**: it's [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) markdown served by [okf-mcp](../okf-mcp). `why` also reads existing v0.1 archives. It adds a schema on top (concept types, a `why:` frontmatter extension, link-section conventions) plus the tooling OKF deliberately doesn't provide: code anchoring, constraint auditing, and the archaeology pipeline. See [DESIGN.md](DESIGN.md) for the full schema.
 
 ## The knowledge model, in one table
 
@@ -62,7 +62,7 @@ The bundle is the center of gravity, and it is **not a new format**: it's [OKF v
 | `incident` | A production event that forced change | "What did we learn the hard way?" |
 | `question` | A why the archaeology could not recover | "What don't we know?" |
 
-Links between concepts are ordinary markdown links; the section a link sits in (`# Because of`, `# Instead of`, `# Superseded by`) gives the edge its meaning. Evidence is spec-standard `# Citations` — commit SHAs, PR and issue URLs — so every claim is checkable.
+Links between concepts are ordinary relative markdown links; the section a link sits in (`# Because of`, `# Instead of`, `# Superseded by`) gives the edge its meaning. Evidence uses OKF v0.2 `sources` with footnote attribution (and reads legacy v0.1 `# Citations`), so every claim is checkable.
 
 Two properties are non-negotiable and shape everything:
 
@@ -129,26 +129,32 @@ the exact workflows documented in [docs/ci.md](docs/ci.md), active under
 [`.github/workflows/`](.github/workflows). Browse it like any bundle:
 
 ```bash
-npx -y @copperbox/okf-mcp --bundle why=.why inspect
+npx -y @copperbox/okf-mcp@^1.3.0 inspect
 ```
 
 ## Getting started
 
-All ten subcommands ship, the four CI recipes run on this repo's own `.why/`
-bundle, and both viewers (`why serve` and the VS Code extension) render live.
+The full CLI, four CI recipes, and both viewers (`why serve` and the VS Code
+extension) ship. Routine use goes through four outcome-oriented workflows;
+the lower-level commands remain available for CI and debugging.
 **[HOWTO.md](HOWTO.md) is the adoption guide** — scaffold a bundle, cold-start
 a dig, wire up the PR gate / re-anchor / weekly audit / post-merge capture jobs, and the
 team habits that make it pay off.
 
 ```bash
 npx -y @copperbox/why init --capture-snippet   # scaffold .why/ + teach CLAUDE.md
+npx -y @copperbox/why bootstrap                # prepare cold-start evidence + agent handoff
+npx -y @copperbox/why impact origin/main...HEAD # decisions affected by a change
+npx -y @copperbox/why maintain                 # anchor + audit + health + inbox
+npx -y @copperbox/why review                   # drafts, questions, and maintenance debt
 npx -y @copperbox/why blame <path>[:line]      # read the story of a span
 npx -y @copperbox/why doctor                   # archive health at a glance
 ```
 
-The ten subcommands — `dig · anchor · audit · blame · capture · lint · doctor ·
-export · init · serve` — are specified in [DESIGN.md §8](DESIGN.md#8-implementation-shape),
-and each operational recipe has a page under [`docs/`](docs).
+The workflow interfaces are documented in [docs/workflows.md](docs/workflows.md).
+The lower-level `dig · anchor · audit · blame · capture · lint · doctor · export`
+commands and the `init · serve` surfaces are specified in
+[DESIGN.md §8](DESIGN.md#8-implementation-shape).
 
 ## Project map
 

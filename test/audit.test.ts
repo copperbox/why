@@ -160,9 +160,13 @@ test("failing check: flip + evidence + blast radius (transitive) + questions, th
       "questions/is-retries-still-needed.md",
     ]);
     const question = await readFile(join(bundle, "questions/is-deadline-still-needed.md"), "utf8");
-    assert.ok(question.includes("(/constraints/acme-cap.md)"), question);
-    assert.ok(question.includes("(/decisions/deadline.md)"), question);
+    assert.ok(question.includes("(../constraints/acme-cap.md)"), question);
+    assert.ok(question.includes("(../decisions/deadline.md)"), question);
     assert.match(question, /status: open/);
+    const queued = (await loadBundle(bundle)).concepts.get("questions/is-deadline-still-needed")!;
+    assert.equal(queued.why.captured_on, expired.expired_on);
+    assert.ok(queued.why.review_by !== undefined && queued.why.review_by > expired.expired_on);
+    assert.equal(queued.why.owner, undefined, "generated questions stay visibly unassigned");
 
     // Everything audit wrote lints clean (expired_on present, sections intact).
     const lint = capture();

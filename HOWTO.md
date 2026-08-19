@@ -75,32 +75,31 @@ archive self-maintaining once agents are in the loop.
 Commit the empty bundle. You now have a valid OKF bundle; everything else adds
 content and keeps it honest.
 
-### 2.2 Cold-start dig — recover the *why* that already exists
+### 2.2 Cold-start bootstrap — recover the *why* that already exists
 
-Nobody hand-writes retroactive ADRs, so `why dig` reconstructs a first bundle
-from history. It's an agent-driven, judgment-heavy pass — **run it
-deliberately, not in CI**. The full runbook is [docs/digging.md](docs/digging.md);
-the shape:
+Nobody hand-writes retroactive ADRs, so `why bootstrap` prepares the complete
+deterministic cold-start workspace and an ordered agent handoff. It is an
+agent-driven, judgment-heavy pass — **run it deliberately, not in CI**:
 
 ```bash
-# 1. deterministic: cluster history into episodes, flag high-value "tells"
-npx -y @copperbox/why dig --episodes --out episodes.json
-
-# 2. deterministic + gh: build one evidence pack per episode
-npx -y @copperbox/why dig --evidence episodes.json --evidence-dir ./exports
+npx -y @copperbox/why bootstrap --evidence-dir ./exports
 ```
 
-Then, per episode, run an agent on the **`skills/dig`** skill with the pack as
+Follow the generated `HANDOFF.md`: per episode, run an agent on the **`skills/dig`** skill with the pack as
 input (reconstruct concepts, cite everything, confidence never above the
 evidence, prefer a `question` over a guess), and once per batch run
 **`skills/dig-synthesize`** (merge duplicates, connect supersede chains,
-promote recurring themes to constraints). Finish with:
+promote recurring themes to constraints). Finish with the composed maintenance
+loop and inspect its queue:
 
 ```bash
-npx -y @copperbox/why anchor      # resolve every new concept's anchors to HEAD
-npx -y @copperbox/why lint        # schema clean
-npx -y @copperbox/why doctor      # health report
+npx -y @copperbox/why maintain
+npx -y @copperbox/why review
 ```
+
+The lower-level `why dig --episodes` and `why dig --evidence` commands remain
+available when you need to control the stages independently; see
+[docs/digging.md](docs/digging.md).
 
 **Priority order for the first dig — usefulness per token:** the *tells* first
 (reverts, fix-after-fix chains, sudden churn on long-quiet files, `HACK` /
@@ -306,7 +305,7 @@ Same data, four surfaces — pick per moment:
   mount it with okf-mcp:
 
   ```bash
-  npx -y @copperbox/okf-mcp --bundle <your-repo>=.why inspect
+  npx -y @copperbox/okf-mcp@^1.3.0 inspect
   ```
 
 ---
@@ -316,6 +315,10 @@ Same data, four surfaces — pick per moment:
 | Command | What it does | Runs as |
 |---|---|---|
 | `why init [--capture-snippet]` | scaffold `.why/`, teach `CLAUDE.md` | once |
+| `why bootstrap [--full]` | prepare episodes, evidence packs, and agent handoff | deliberate |
+| `why maintain` | lint, re-anchor, audit, health-check, summarize inbox | integration branch / scheduled |
+| `why review [--promote <draft>]` | consolidated editorial queue and promotion | weekly / editorial |
+| `why impact [<git-range>]` | decisions and expired upstream constraints affected by a diff | before review |
 | `why dig --episodes` / `--evidence` | deterministic archaeology inputs | deliberate |
 | `why anchor [--check] [--concept <id>]` | re-resolve anchors to HEAD (`--check` = CI, writes nothing) | pre-commit / PR gate |
 | `why lint [--json]` | schema conformance, exit 1 on error | PR gate |

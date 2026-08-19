@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { splitFrontmatter } from "@copperbox/okf-mcp";
+import { splitFrontmatter } from "../src/okf.ts";
 import { parseLineRange } from "../src/anchors.ts";
 import { loadBundle } from "../src/bundle.ts";
 import {
@@ -165,7 +165,7 @@ test("merged PR → decision draft: verbatim quotes, PR + merge-commit citations
   const mergeSha = shas[1]!;
   const bundle = await loadBundle(whyRoot);
   const { runner } = fixtureRunner(prFixture(mergeSha));
-  const result = await capturePr(bundle, 7, { runner });
+  const result = await capturePr(bundle, 7, { runner, now: new Date("2026-07-04T12:00:00Z") });
 
   assert.equal(result.type, "decision");
   assert.equal(basename(result.draftPath), "pr-7-replace-striped-locks-with-queue.md");
@@ -177,6 +177,9 @@ test("merged PR → decision draft: verbatim quotes, PR + merge-commit citations
   const why = whyOf(data);
   assert.equal(why.status, "active");
   assert.equal(why.happened_on, "2026-07-02");
+  assert.equal(why.owner, "@jane");
+  assert.equal(why.captured_on, "2026-07-04");
+  assert.equal(why.review_by, "2026-07-18");
   assert.equal(why.confidence, "recorded");
   assert.deepEqual(why.anchors, [
     { path: "src/lock.rs", lines: "3-5", as_of: mergeSha, state: "live" },
@@ -310,7 +313,7 @@ test("drafts never serve: bundle loads skip .drafts/, blame finds nothing, lint 
 
 // --- Promotion --------------------------------------------------------------------
 
-test("promotion: lint-clean draft moves into its type dir, gets a timestamp, and starts serving", async () => {
+test("promotion: lint-clean draft moves into its type dir, gets v0.2 provenance, and starts serving", async () => {
   const { repo, whyRoot, shas } = await seedRepo();
   const bundle = await loadBundle(whyRoot);
   const result = await captureCommit(bundle, shas[1]!, { runner: runCommand });
@@ -324,7 +327,8 @@ test("promotion: lint-clean draft moves into its type dir, gets a timestamp, and
   assert.ok(!existsSync(result.evidencePath), "evidence sidecar removed after promote");
 
   const { data } = await readDraft(target);
-  assert.ok(typeof data.timestamp === "string" && data.timestamp !== "", "writeConcept stamps timestamp");
+  assert.ok(typeof data.generated === "object" && data.generated !== null, "writeConcept stamps generated provenance");
+  assert.equal(data.timestamp, undefined, "a v0.2 bundle never receives legacy timestamp provenance");
 
   const lint = capture();
   assert.equal(await main(["lint", whyRoot], repo, lint.io), 0, lint.err.join("\n"));

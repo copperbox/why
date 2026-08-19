@@ -23,7 +23,7 @@ package. In a repo that consumes `why` as a dependency, replace
 `npm ci` + `npm run why -- …` with `npx -y @copperbox/why …` and drop the
 Node setup to taste; everything else transfers unchanged.
 
-## The PR gate: `why lint` + `why anchor --check --allow-drift`
+## The PR gate: lint, anchor safety, and decision impact
 
 `why lint` fails on schema errors (missing required sections, bad edge
 targets, confidence claims without citations).
@@ -44,6 +44,11 @@ as `state: lost` does not fail either; surfacing those is `why doctor`'s job.
 Use plain `why anchor --check` (no `--allow-drift`) when you want the strict
 question — "is this bundle fully up to date with this commit?" — which is the
 right check on `main`, not on a PR.
+
+Finally, `why impact origin/<base>...HEAD` writes the affected concepts and
+their expired upstream constraints into the GitHub job summary. It is
+informational rather than a new merge gate: the purpose is to put relevant
+rationale directly in the review path.
 
 `.github/workflows/why-pr-gate.yml`:
 
@@ -76,6 +81,10 @@ jobs:
       - run: npm ci
       - run: npm run why -- lint
       - run: npm run why -- anchor --check --allow-drift
+      - name: decision impact summary
+        run: |
+          npm run --silent why -- impact "origin/${{ github.base_ref }}...HEAD" | tee why-impact.txt
+          cat why-impact.txt >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ## Post-merge re-anchoring: `why anchor` from `main`

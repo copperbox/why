@@ -9,9 +9,11 @@ import { loadBundle, validateBundle } from "@copperbox/okf-mcp";
 import { main } from "../src/cli.ts";
 import {
   InitError,
+  OKF_CONFIG_FILENAME,
   SNIPPET_BEGIN,
   SNIPPET_END,
   writeCaptureSnippet,
+  writeOkfConfig,
 } from "../src/init.ts";
 import { capture } from "./helpers.ts";
 
@@ -52,7 +54,7 @@ test("init scaffolds a bundle that okf-mcp validates with zero errors", async ()
     assert.deepEqual(dirs, ["attempts", "constraints", "decisions", "incidents", "questions"]);
 
     const index = await readFile(join(root, "index.md"), "utf8");
-    assert.ok(index.includes('okf_version: "0.1"'), index);
+    assert.ok(index.includes('okf_version: "0.2"'), index);
     assert.ok(index.includes("generated: false"), index);
     assert.ok(index.includes(`description: Decision archive for ${basename(repo)}`), index);
 
@@ -65,8 +67,10 @@ test("init scaffolds a bundle that okf-mcp validates with zero errors", async ()
     assert.deepEqual(report.warnings, []);
 
     const text = out.join("\n");
-    assert.ok(text.includes("okf-mcp"), `next steps should show the mount command: ${text}`);
-    assert.ok(text.includes("why dig"), `next steps should point at why dig: ${text}`);
+    assert.ok(text.includes("okf-mcp"), `next steps should show the server command: ${text}`);
+    const config = JSON.parse(await readFile(join(repo, OKF_CONFIG_FILENAME), "utf8"));
+    assert.deepEqual(config.bundles[basename(repo)], { path: ".why", writable: true });
+    assert.ok(text.includes("why bootstrap"), `next steps should point at why bootstrap: ${text}`);
   } finally {
     await rm(repo, { recursive: true, force: true });
   }
@@ -118,6 +122,26 @@ test("init outside a git repository exits 1 with a clear message", async () => {
     assert.ok(err.join("\n").includes("git"), err.join("\n"));
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("okf config registration preserves other mounts and refuses an explicit read-only conflict", async () => {
+  const repo = await makeGitRepo();
+  try {
+    const configPath = join(repo, OKF_CONFIG_FILENAME);
+    await writeFile(configPath, JSON.stringify({ bundles: { team: "../team" }, searchLimit: 20 }));
+    assert.equal(await writeOkfConfig(repo), "updated");
+    const updated = JSON.parse(await readFile(configPath, "utf8"));
+    assert.equal(updated.bundles.team, "../team");
+    assert.deepEqual(updated.bundles[basename(repo)], { path: ".why", writable: true });
+    assert.equal(updated.searchLimit, 20);
+
+    updated.bundles[basename(repo)].writable = false;
+    await writeFile(configPath, JSON.stringify(updated));
+    assert.equal(await writeOkfConfig(repo), "conflict");
+    assert.equal(JSON.parse(await readFile(configPath, "utf8")).bundles[basename(repo)].writable, false);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
   }
 });
 

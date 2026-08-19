@@ -38,6 +38,9 @@ why capture --commit a3f9c2e  # fallback: from a local commit, no gh needed
   closed without merging → `attempt` (status `abandoned`); a still-open PR is
   refused — capture records outcomes.
 - **`happened_on`** comes from the merge/close time.
+- **Review pressure** is explicit: `owner` is the PR author, `captured_on` is
+  the capture date, and `review_by` defaults to fourteen days later. `why
+  review` uses these fields for its consolidated inbox.
 - **Anchors come from the merge diff's hunks**: one anchor per hunk's
   new-side span (zero-context, exact to the changed lines), `as_of` the merge
   commit, `state: live`. A file with many hunks collapses to one whole-file
@@ -75,7 +78,7 @@ why capture --promote pr-212-replace-striped-locks.md
 ```
 
 The draft is written into the type directory named by its frontmatter
-(`decisions/`, `attempts/`, …) via okf-mcp — which stamps `timestamp` and
+(`decisions/`, `attempts/`, …) via okf-mcp — which stamps version-appropriate generation provenance and
 normalizes citations — and the bundle is linted. Any error-severity finding
 on the new file rolls the write back and keeps the draft, printing the
 findings; warnings and findings elsewhere in the bundle never block. On

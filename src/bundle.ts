@@ -4,17 +4,13 @@
 // Loading is permissive in the OKF spirit: malformed `why:` data becomes a
 // diagnostic, never an exception — `why lint` renders the diagnostics.
 
-import {
-  loadBundle as loadOkfBundle,
-  sectionAt,
-  splitSections,
-} from "@copperbox/okf-mcp";
+import { loadBundle as loadOkfBundle } from "@copperbox/okf-mcp";
 import type {
-  BodySection,
   ConceptFrontmatter,
   ConceptLink,
   LoadedBundle,
 } from "@copperbox/okf-mcp";
+import { sectionAt, splitSections, type BodySection } from "./okf.js";
 
 export const CONCEPT_TYPES = ["decision", "constraint", "attempt", "incident", "question"] as const;
 export type ConceptType = (typeof CONCEPT_TYPES)[number];
@@ -65,6 +61,12 @@ export interface VerifySpec {
 export interface WhyMeta {
   status?: string;
   happened_on?: string;
+  /** When an item entered the editorial queue. */
+  captured_on?: string;
+  /** Person or team responsible for resolving the item. */
+  owner?: string;
+  /** Date by which editorial review should happen. */
+  review_by?: string;
   expired_on?: string;
   confidence?: Confidence;
   anchors: Anchor[];
@@ -106,7 +108,17 @@ export interface WhyBundle {
   okf: LoadedBundle;
 }
 
-const WHY_KEYS = new Set(["status", "happened_on", "expired_on", "confidence", "anchors", "verify"]);
+const WHY_KEYS = new Set([
+  "status",
+  "happened_on",
+  "captured_on",
+  "owner",
+  "review_by",
+  "expired_on",
+  "confidence",
+  "anchors",
+  "verify",
+]);
 
 export function isPlainMap(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -234,12 +246,17 @@ function readWhyMeta(
       }
     }
   }
-  for (const key of ["happened_on", "expired_on"] as const) {
+  for (const key of ["happened_on", "captured_on", "review_by", "expired_on"] as const) {
     if (raw[key] !== undefined) {
       const date = asStringy(raw[key]);
       if (date === undefined) push(`why.${key}`, "must be a date string");
       else meta[key] = date;
     }
+  }
+  if (raw.owner !== undefined) {
+    const owner = asStringy(raw.owner);
+    if (owner === undefined || owner.trim() === "") push("why.owner", "must be a non-empty string");
+    else meta.owner = owner;
   }
   if (raw.confidence !== undefined) {
     if (isOneOf(CONFIDENCE_LEVELS, raw.confidence)) {

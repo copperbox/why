@@ -20,15 +20,15 @@ AcmeCorp — at the time harbor's largest customer — fronted all traffic with 
 
 # Why
 
-Not a technical constraint but a commercial one: Acme's gateway was outside our control, and their retries on kill amplified load exactly when we were slowest. Every synchronous path Acme touched had to complete comfortably inside 45s, which shaped the [47s request deadline](/decisions/47s-request-deadline.md) (47s server-side so *our* timeout fires only after theirs — deliberate, see that decision).
+Not a technical constraint but a commercial one: Acme's gateway was outside our control, and their retries on kill amplified load exactly when we were slowest. Every synchronous path Acme touched had to complete comfortably inside 45s, which shaped the [47s request deadline](../decisions/47s-request-deadline.md) (47s server-side so *our* timeout fires only after theirs — deliberate, see that decision).
 
 # Still true?
 
-**No — expired 2025-06-30.** The Acme contract ended at June 2025 renewal (they migrated to self-hosted) [2]. No other customer is known to enforce a comparable gateway cap. Downstream decisions shaped by this constraint are candidate scar tissue; see [47s request deadline](/decisions/47s-request-deadline.md).
+**No — expired 2025-06-30.** The Acme contract ended at June 2025 renewal (they migrated to self-hosted) [2]. No other customer is known to enforce a comparable gateway cap. Downstream decisions shaped by this constraint are candidate scar tissue; see [47s request deadline](../decisions/47s-request-deadline.md).
 
 # Led to
 
-- [47s request deadline](/decisions/47s-request-deadline.md)
+- [47s request deadline](../decisions/47s-request-deadline.md)
 
 # Citations
 

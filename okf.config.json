@@ -1,0 +1,8 @@
+{
+  "bundles": {
+    "why": {
+      "path": ".why",
+      "writable": true
+    }
+  }
+}

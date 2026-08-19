@@ -49,7 +49,7 @@ Recorded in the PR's "What & why" [1]. A stable, versioned contract lets the UIs
 
 # Because of
 
-- [Consumption before archaeology](/decisions/consumption-before-archaeology.md)
+- [Consumption before archaeology](consumption-before-archaeology.md)
 
 # Citations
 

@@ -4,7 +4,7 @@ Decision archaeology for codebases: recover the *why* behind code from git/PR/is
 
 ## Session start
 
-1. `why` is built and shipping — all ten subcommands, both viewers, and the three
+1. `why` is built and shipping — the outcome and lower-level commands, both viewers, and the three
    CI recipes are live. Work now arrives as GitHub issues and as open `question`
    concepts in [.why/](.why/index.md).
 2. **The project's decision memory *is* the `.why/` bundle.** Consult it before

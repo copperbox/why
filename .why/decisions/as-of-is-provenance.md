@@ -28,7 +28,7 @@ commit. An `as_of` that is a non-ancestor (or does not resolve) carries no
 such meaning, and "never re-stamp a stable anchor" does not extend to it:
 `why anchor` repairs such an orphan when the claim re-verifies at HEAD without
 reading `as_of` — see
-[orphaned as_of is repaired](/decisions/orphaned-as-of-is-repaired.md). That
+[orphaned as_of is repaired](orphaned-as-of-is-repaired.md). That
 repair is what makes the `not-ancestor` finding this decision kept genuinely
 actionable.
 

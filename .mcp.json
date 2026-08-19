@@ -3,9 +3,7 @@
         "okf": {
             "command": "npx",
             "args": [
-                "-y", "@copperbox/okf-mcp",
-                "--bundle", "why=.why",
-                "--writable"
+                "-y", "@copperbox/okf-mcp@^1.3.0"
             ]
         }
     }

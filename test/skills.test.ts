@@ -31,6 +31,10 @@ const DOC_PATHS = [
  * plan (Phases 1–4 plus the Phase 5/6 UI surface: `export`, `serve`). */
 const IMPLEMENTED_SUBCOMMANDS = new Set([
   "init",
+  "bootstrap",
+  "maintain",
+  "review",
+  "impact",
   "lint",
   "blame",
   "anchor",
@@ -47,6 +51,7 @@ const IMPLEMENTED_SUBCOMMANDS = new Set([
 const NON_TOOL_TOKENS = new Set([
   "child_process",
   "happened_on",
+  "captured_on",
   "expired_on",
   "as_of",
   "review_by",
@@ -54,6 +59,7 @@ const NON_TOOL_TOKENS = new Set([
   "retry_jitter",
   "acquire_shared",
   "pull_request",
+  "base_ref",
   "workflow_dispatch",
   "node_modules",
 ]);
@@ -114,8 +120,10 @@ test("docs reference only why subcommands that exist at this point in the plan",
 });
 
 test("docs name only okf-mcp tools that actually exist", () => {
-  const okfReadme = read("node_modules/@copperbox/okf-mcp/README.md");
-  const tools = new Set([...okfReadme.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1]!));
+  // The published 1.x package keeps its tool catalog in runtime registration
+  // code; docs/tools.md is linked from README but intentionally not packed.
+  const server = read("node_modules/@copperbox/okf-mcp/dist/server.js");
+  const tools = new Set([...server.matchAll(/registerTool\("([a-z_]+)"/g)].map((m) => m[1]!));
   for (const known of ["search_concepts", "get_concept", "write_concept", "update_concept"]) {
     assert.ok(tools.has(known), `okf-mcp README table no longer lists ${known} — update this test`);
   }

@@ -9,7 +9,8 @@ You are the judgment half of merge-time capture (DESIGN.md open problem #5).
 `why capture --pr <n>` already did the deterministic half: it assembled the
 PR's evidence into a pack and emitted a draft into `.why/.drafts/` with
 frontmatter pre-filled (type guessed from merge-vs-close, `happened_on`,
-anchors derived from the merge diff's hunks, citations to the PR) and the
+editorial `owner`/`captured_on`/`review_by`, anchors derived from the merge
+diff's hunks, citations to the PR) and the
 rationale candidates quoted verbatim. Drafts are deliberately **not served**
 — nothing in `.why/.drafts/` reaches `why blame` or the mounted bundle until
 you promote it. Your input is one draft plus its `.evidence.md` sidecar; your
@@ -19,7 +20,7 @@ output is either a promoted concept, an update to an existing concept, a
 The bundle is mounted writable:
 
 ```bash
-npx -y @copperbox/okf-mcp --bundle <repo-name>=.why --writable
+npx -y @copperbox/okf-mcp@^1.3.0
 ```
 
 ## The contract — non-negotiable
@@ -90,7 +91,8 @@ drops down the ladder from there.
    (`pr-212-….md`); rename the file to a short kebab-case slug for the idea
    (`queue-based-locking.md`) before promoting — the filename becomes the
    concept id.
-8. **Promote.** `why capture --promote <draft>` moves the draft into its type
+8. **Promote.** `why review --promote <draft>` (or the lower-level `why capture
+   --promote <draft>`) moves the draft into its type
    directory only if it lints clean; a refusal prints the findings and keeps
    the draft — fix and re-run. If the draft instead folded into an existing
    concept or became a `question` you wrote directly, delete the draft and

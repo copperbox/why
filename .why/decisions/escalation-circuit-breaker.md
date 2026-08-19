@@ -25,7 +25,7 @@ Recorded at decision time [1]: rewriting a failing spec is the one act the pipel
 
 # Because of
 
-- [Autonomous build via Sandcastle + gatekeeper](/decisions/autonomous-build-via-sandcastle.md)
+- [Autonomous build via Sandcastle + gatekeeper](autonomous-build-via-sandcastle.md)
 
 # Citations
 

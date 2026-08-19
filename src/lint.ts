@@ -59,6 +59,9 @@ const FIELD_RULES: Record<string, RuleId> = {
   anchors: "W103",
   verify: "W104",
   happened_on: "W100",
+  captured_on: "W100",
+  owner: "W100",
+  review_by: "W100",
   expired_on: "W100",
 };
 
