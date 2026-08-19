@@ -14,8 +14,8 @@ why:
   confidence: recorded
   anchors:
     - path: src/cli.ts
-      lines: 639-654
-      as_of: 9c434ae
+      lines: 655-670
+      as_of: fa87a3b
       state: live
     - path: test/cli.test.ts
       lines: 73-95
