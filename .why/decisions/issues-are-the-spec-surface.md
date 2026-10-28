@@ -6,18 +6,16 @@ description: Each Phase 1–4 task is a self-contained issue with testable
 tags: [ process, autobuild ]
 timestamp: 2026-07-13
 why:
-  status: active
+  status: reversed
   happened_on: 2026-07-11
   confidence: recorded
-  anchors:
-    - path: .sandcastle/README.md
-      as_of: fa87a3b
-      state: live
 ---
 
 # Issues are the spec surface
 
 Every delegated task became a self-contained issue in `issues/` with testable acceptance criteria, and those issue bodies — not chat context — are what the pipeline's implementers and the gatekeeper judge against.
+
+Reversed: issues were the spec surface for the Sandcastle pipeline's implementers and gate, which have been removed. Its last-known anchor was `.sandcastle/README.md` as of fa87a3b [2].
 
 # Why
 
@@ -30,3 +28,4 @@ Recorded at project bootstrap [1]: the pipeline's implementers and the gate both
 # Citations
 
 [1] [bootstrap commit 9f0dc16 — PLAN.md Decision log, 2026-07-11](https://github.com/copperbox/why/commit/9f0dc16ff06e3790eed67bfd62207e2839afb7b7)
+[2] [.sandcastle/README.md as of fa87a3b, before the pipeline was removed](https://github.com/copperbox/why/blob/fa87a3b49ff4d7bf41df7178b7e02e45bcc28b0a/.sandcastle/README.md)
