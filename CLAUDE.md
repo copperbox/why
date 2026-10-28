@@ -30,9 +30,3 @@ Decision archaeology for codebases: recover the *why* behind code from git/PR/is
 
 - `../okf-mcp` — the OKF MCP server this builds on (same author, source available locally). Its README documents the full tool surface; prefer depending on it over reimplementing bundle handling.
 - Serve the example: `cd ../okf-mcp && npm run dev -- --bundle harbor=../why/examples/harbor inspect`
-
-## Repo tooling
-
-`.sandcastle/` holds an optional agent pipeline that built the initial codebase
-and is kept for well-specified batch work; it is not the default path for
-changes and nothing shipped depends on it. See `.sandcastle/README.md`.
