@@ -15,8 +15,8 @@ why:
   confidence: recorded
   anchors:
     - path: DESIGN.md
-      lines: 193-196
-      as_of: fa87a3b
+      lines: 218-220
+      as_of: eab8a44
       state: live
     - path: src/serve.ts
       as_of: 61a4e85

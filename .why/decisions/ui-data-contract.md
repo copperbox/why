@@ -16,8 +16,8 @@ why:
   confidence: recorded
   anchors:
     - path: DESIGN.md
-      lines: 194
-      as_of: fa87a3b
+      lines: 218
+      as_of: eab8a44
       state: live
     - path: docs/ui-contract.md
       as_of: 0f75578
